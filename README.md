@@ -10,6 +10,8 @@ Application Python de découverte et d'exploration du vieillissement des polymè
 
 ## Ouvrir Materia
 
+### Sur l'ordinateur de chaque étudiant
+
 1. Téléchargez le ZIP du dépôt GitHub et décompressez-le.
 2. Installez [Python 3.13](https://www.python.org/downloads/) si nécessaire.
 3. **macOS :** double-cliquez sur `Lancer-Materia.command`.
@@ -23,7 +25,11 @@ Avec Docker :
 docker compose up --build
 ```
 
-GitHub Pages ne peut pas exécuter cette application Python. Pour donner une URL publique unique à toute une classe, déployez l'image Docker sur un serveur HTTPS. Les instructions et les variables sont détaillées dans [docs/INSTALLATION.md](docs/INSTALLATION.md).
+### Avec une URL commune pour toute la classe
+
+Déployez une seule instance Docker sur un serveur : les étudiants n'installent alors ni Python ni Docker et utilisent Materia depuis leur navigateur, sur macOS, Windows, Linux, tablette ou Chromebook. La base et les comptes sont conservés dans le volume persistant du serveur.
+
+GitHub Pages ne peut pas exécuter cette application Python. Pour obtenir cette URL commune, déployez l'image Docker derrière HTTPS et définissez les deux codes d'administration dans `.env`. Les instructions et les variables sont détaillées dans [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 ## Parcours disponibles
 
@@ -65,7 +71,7 @@ Les données sont dans `data/materia.sqlite3`. Les visiteurs peuvent essayer le 
 
 Les comptes enseignants nécessitent un code serveur. Au premier lancement local, Materia génère ce code dans `data/.teacher_token` avec des droits de lecture restreints. `MATERIA_TEACHER_TOKEN` permet de fournir un secret géré par l’établissement et reste prioritaire. Cette identité locale rend le pilote de classe utilisable ; un déploiement à l’échelle de l’école doit la remplacer ou la relier au SSO.
 
-Le secret local est généré au premier lancement dans `data/.secret`. Les sessions NiceGUI sont dans `.nicegui/`. Ces fichiers sont ignorés par Git. Ne pas publier ce prototype tel quel sur Internet.
+Le secret local est généré au premier lancement dans `data/.secret`. Les sessions NiceGUI sont dans `.nicegui/`. Ces fichiers sont ignorés par Git. Pour une publication Internet, utiliser le déploiement Docker documenté, des codes d'administration longs, un volume persistant et un domaine HTTPS.
 
 La file de validation scientifique est verrouillée par défaut. Son code local est généré dans `data/.review_token` ; `MATERIA_REVIEW_TOKEN` permet de le remplacer. Il faut un compte enseignant ou administrateur et ce second code pour accepter ou rejeter une expérience.
 

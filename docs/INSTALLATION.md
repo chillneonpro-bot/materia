@@ -54,6 +54,8 @@ Le workflow `container.yml` construit une image Linux `amd64` et `arm64` dans Gi
 
 GitHub Pages héberge uniquement des fichiers statiques et ne peut pas faire fonctionner NiceGUI, Python ou SQLite. Pour une URL publique, utiliser l'image Docker sur un serveur ou une plateforme acceptant les conteneurs, monter un volume persistant sur `/app/data`, puis placer l'application derrière un domaine HTTPS.
 
+Dans ce mode, tous les étudiants ouvrent la même adresse dans un navigateur. Ils n'ont rien à installer sur leur Mac ou leur PC ; seul le serveur exécute Python et conserve les comptes, projets et documents.
+
 Variables de serveur :
 
 | Variable | Usage |
