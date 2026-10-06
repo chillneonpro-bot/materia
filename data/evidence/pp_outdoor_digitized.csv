@@ -1,0 +1,11 @@
+source_id,experiment_id,time_days,modulus_mpa,extraction_uncertainty_pct,source_location
+mdpi-pp-zno-sunlight-2020,BANGKOK-PP-NEAT,0,241,2,Figure 4
+mdpi-pp-zno-sunlight-2020,BANGKOK-PP-NEAT,21,285,2,Figure 4
+mdpi-pp-zno-sunlight-2020,BANGKOK-PP-NEAT,42,284,2,Figure 4
+mdpi-pp-zno-sunlight-2020,BANGKOK-PP-NEAT,84,263,2,Figure 4
+mdpi-pp-zno-sunlight-2020,BANGKOK-PP-NEAT,126,252,2,Figure 4
+mdpi-pp-zno-sunlight-2020,BANGKOK-PP-NEAT,168,244,2,Figure 4
+ccse-pp-riyadh-weathering-2011,RIYADH-PP520L-NEAT,0,1400,5,Figure 8
+ccse-pp-riyadh-weathering-2011,RIYADH-PP520L-NEAT,60.875,620,5,Figure 8
+ccse-pp-riyadh-weathering-2011,RIYADH-PP520L-NEAT,121.75,580,5,Figure 8
+ccse-pp-riyadh-weathering-2011,RIYADH-PP520L-NEAT,182.625,1060,5,Figure 8

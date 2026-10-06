@@ -1,0 +1,12 @@
+{
+  "name": "Materia",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.13-bookworm",
+  "postCreateCommand": "python -m pip install -r requirements-lock.txt",
+  "forwardPorts": [8087],
+  "portsAttributes": {
+    "8087": {
+      "label": "Materia",
+      "onAutoForward": "openBrowser"
+    }
+  }
+}

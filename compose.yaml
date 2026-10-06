@@ -1,0 +1,18 @@
+services:
+  materia:
+    build: .
+    ports:
+      - "8087:8087"
+    environment:
+      MATERIA_HOST: 0.0.0.0
+      MATERIA_PORT: 8087
+      MATERIA_SHOW_BROWSER: 0
+      MATERIA_EXTERNAL_URL: ${MATERIA_EXTERNAL_URL:-http://localhost:8087}
+      MATERIA_TEACHER_TOKEN: ${MATERIA_TEACHER_TOKEN:-}
+      MATERIA_REVIEW_TOKEN: ${MATERIA_REVIEW_TOKEN:-}
+    volumes:
+      - materia-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  materia-data:

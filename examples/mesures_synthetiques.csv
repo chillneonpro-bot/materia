@@ -1,0 +1,13 @@
+experiment_id,time,time_unit,modulus,modulus_unit,initial_modulus,initial_modulus_unit,temperature_C,humidity_RH,thickness_mm,measurement_temperature_C,material,protocol,source,location
+SYNTH-A,0,hours,2000,MPa,2000,MPa,40,60,1.0,23,Formulation fictive,tensile,Jeu synthétique Materia,"SYNTH-A t=0 h"
+SYNTH-A,240,hours,1969.25,MPa,2000,MPa,40,60,1.0,23,Formulation fictive,tensile,Jeu synthétique Materia,"SYNTH-A t=240 h"
+SYNTH-A,480,hours,1938.98,MPa,2000,MPa,40,60,1.0,23,Formulation fictive,tensile,Jeu synthétique Materia,"SYNTH-A t=480 h"
+SYNTH-A,960,hours,1880.13,MPa,2000,MPa,40,60,1.0,23,Formulation fictive,tensile,Jeu synthétique Materia,"SYNTH-A t=960 h"
+SYNTH-B,0,hours,2000,MPa,2000,MPa,60,75,1.5,23,Formulation fictive,tensile,Jeu synthétique Materia,"SYNTH-B t=0 h"
+SYNTH-B,240,hours,1980.90,MPa,2000,MPa,60,75,1.5,23,Formulation fictive,tensile,Jeu synthétique Materia,"SYNTH-B t=240 h"
+SYNTH-B,480,hours,1961.98,MPa,2000,MPa,60,75,1.5,23,Formulation fictive,tensile,Jeu synthétique Materia,"SYNTH-B t=480 h"
+SYNTH-B,960,hours,1924.68,MPa,2000,MPa,60,75,1.5,23,Formulation fictive,tensile,Jeu synthétique Materia,"SYNTH-B t=960 h"
+SYNTH-C,0,hours,2000,MPa,2000,MPa,80,90,2.0,23,Formulation fictive,tensile,Jeu synthétique Materia,"SYNTH-C t=0 h"
+SYNTH-C,240,hours,1985.66,MPa,2000,MPa,80,90,2.0,23,Formulation fictive,tensile,Jeu synthétique Materia,"SYNTH-C t=240 h"
+SYNTH-C,480,hours,1971.42,MPa,2000,MPa,80,90,2.0,23,Formulation fictive,tensile,Jeu synthétique Materia,"SYNTH-C t=480 h"
+SYNTH-C,960,hours,1943.25,MPa,2000,MPa,80,90,2.0,23,Formulation fictive,tensile,Jeu synthétique Materia,"SYNTH-C t=960 h"

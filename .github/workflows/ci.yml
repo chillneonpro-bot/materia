@@ -1,0 +1,50 @@
+name: Tests multiplateformes
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    name: ${{ matrix.os }} · Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-lock.txt
+      - name: Installer les dépendances
+        run: python -m pip install -r requirements-lock.txt
+      - name: Contrôler la syntaxe
+        run: python -m compileall -q main.py launcher.py materia
+      - name: Exécuter les tests
+        run: python -m pytest -q
+
+  docker:
+    name: Construction Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: materia:test
+      - name: Démarrer et contrôler l'image
+        run: |
+          docker run --detach --name materia-ci --publish 8087:8087 materia:test
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8087/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs materia-ci
+          exit 1

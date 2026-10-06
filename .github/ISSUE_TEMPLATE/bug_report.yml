@@ -1,0 +1,32 @@
+name: Signaler un problème
+description: Signaler un bug reproductible dans Materia
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: dropdown
+    id: os
+    attributes:
+      label: Système
+      options: [Windows, macOS, Linux, Docker]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version de Materia
+      placeholder: "0.38.0"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Étapes pour reproduire
+      description: Indiquez les actions, le matériau et les paramètres utilisés sans joindre de mot de passe ni de jeton.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Résultat attendu et résultat obtenu
+    validations:
+      required: true

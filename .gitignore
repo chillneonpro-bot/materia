@@ -1,0 +1,33 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.nicegui/
+.DS_Store
+Thumbs.db
+
+# Données locales, comptes et secrets : jamais dans GitHub
+data/*.sqlite3*
+data/.secret
+data/.teacher_token
+data/.review_token
+data/backups/
+data/documents/
+data/sauvegarde*.sqlite3*
+
+# Fichiers produits localement
+output/
+outputs/
+tmp/
+*.log
+
+# Configuration locale
+.env
+.env.*
+!.env.example
+
+# Empreinte locale du lanceur
+.materia-requirements.sha256
