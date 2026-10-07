@@ -2,7 +2,7 @@
 
 **Python 3.11–3.13 · Windows · macOS · Linux · Docker**
 
-Version actuelle : **0.38.0**. Materia est prêt à être distribué dans un dépôt GitHub : lancement assisté sur macOS et Windows, image Docker, données persistantes et tests automatiques sur les trois systèmes. Voir [l'installation complète](docs/INSTALLATION.md), [la mise à jour v0.38](docs/MISE_A_JOUR_V0.38.md) et [les propriétés recoupées v0.37](docs/MISE_A_JOUR_V0.37.md).
+Version actuelle : **0.38.0**. Materia est prêt à être distribué dans un dépôt GitHub : lancement assisté sur macOS et Windows, image Docker, données persistantes et tests automatiques sur les trois systèmes. Voir le [guide utilisateur illustré en PDF](docs/Guide_utilisateur_Materia_v0.38.pdf), sa [version Word modifiable](docs/Guide_utilisateur_Materia_v0.38.docx), [l'installation complète](docs/INSTALLATION.md), [la mise à jour v0.38](docs/MISE_A_JOUR_V0.38.md) et [les propriétés recoupées v0.37](docs/MISE_A_JOUR_V0.37.md).
 
 Application Python de découverte et d'exploration du vieillissement des polymères. Interface NiceGUI, graphiques Plotly, calcul NumPy/SciPy et persistance SQLite.
 
