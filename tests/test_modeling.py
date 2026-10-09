@@ -69,11 +69,11 @@ def test_datasheet_estimator_uses_environment_and_reports_threshold():
     assert outdoor['modulus'][-1] < indoor['modulus'][-1]
     assert indoor['crossing_estimate_years'] > 0
     assert indoor['crossing_interval'][0] < indoor['crossing_estimate_years'] < indoor['crossing_interval'][1]
-    assert indoor['crossing_interval'][1] / indoor['crossing_interval'][0] == pytest.approx(1.2/.8)
+    assert indoor['crossing_interval'][1] / indoor['crossing_interval'][0] == pytest.approx(1.1/.9)
     assert indoor['manifest']['status'].startswith('ESTIMATION DOCUMENTAIRE DE PRÉSÉLECTION')
     assert indoor['manifest']['evidence_level']=='exploratory_family_assumptions'
     assert indoor['manifest']['uncertainty']['kind']=='standardized_rate_sensitivity'
-    assert indoor['manifest']['uncertainty']['rate_multipliers']==[.8,1.2]
+    assert indoor['manifest']['uncertainty']['rate_multipliers']==[.9,1.1]
     assert indoor['manifest']['uncertainty']['source_specific']['kind']=='scenario_sensitivity'
     assert indoor['manifest']['uncertainty']['display_band'] is True
 
@@ -105,9 +105,9 @@ def test_every_datasheet_material_uses_the_same_standardized_interval():
         uncertainty=result['manifest']['uncertainty']
         crossing=result['crossing_estimate_years']
         assert uncertainty['kind']=='standardized_rate_sensitivity'
-        assert uncertainty['rate_multipliers']==[.8,1.2]
-        assert result['crossing_interval'][0]==pytest.approx(crossing/1.2)
-        assert result['crossing_interval'][1]==pytest.approx(crossing/.8)
+        assert uncertainty['rate_multipliers']==[.9,1.1]
+        assert result['crossing_interval'][0]==pytest.approx(crossing/1.1)
+        assert result['crossing_interval'][1]==pytest.approx(crossing/.9)
         assert all(lower<=center<=upper for lower,center,upper
                    in zip(result['lower'],result['modulus'],result['upper']))
 
@@ -145,7 +145,7 @@ def test_iir_unmeasured_temperature_uses_masked_transfer_error_not_published_sd(
     assert uncertainty['kind']=='standardized_rate_sensitivity'
     assert uncertainty['source_specific']['kind']=='temperature_transfer_holdout'
     assert uncertainty['source_specific']['calibration']['empirical_half_width_pct']==pytest.approx(26.2381252684)
-    assert uncertainty['rate_multipliers']==[.8,1.2]
+    assert uncertainty['rate_multipliers']==[.9,1.1]
     assert any('±26,24 %' in warning for warning in interpolated['manifest']['warnings'])
 
 
@@ -179,7 +179,7 @@ def test_pp_evidence_profile_is_tight_in_domain_and_expands_after_observations()
     assert short['retention'][-1]==pytest.approx(90.01,abs=.05)
     short_width=(short['upper'][-1]-short['lower'][-1])/short['modulus'][-1]
     long_width=(long['upper'][-1]-long['lower'][-1])/long['modulus'][-1]
-    assert .04 < short_width < .05
+    assert .02 < short_width < .03
     assert short['manifest']['uncertainty']['kind']=='standardized_rate_sensitivity'
     assert short['manifest']['uncertainty']['source_specific']['kind']=='internal_holdout_interval'
     assert short['manifest']['uncertainty']['predictive_interval_validated'] is False
@@ -233,8 +233,8 @@ def test_pp_long_horizon_replaces_calibrated_band_with_projection_sensitivity():
     assert result['lower'][-1] < result['modulus'][-1] < result['upper'][-1]
     assert result['upper'][-1] / result['lower'][-1] < 1.25
     assert format_years_months(result['crossing_estimate_years'])=='1 an et 8 mois'
-    assert result['crossing_interval'][0]==pytest.approx(result['crossing_estimate_years']/1.2)
-    assert result['crossing_interval'][1]==pytest.approx(result['crossing_estimate_years']/.8)
+    assert result['crossing_interval'][0]==pytest.approx(result['crossing_estimate_years']/1.1)
+    assert result['crossing_interval'][1]==pytest.approx(result['crossing_estimate_years']/.9)
     assert curve_value_origins(result)[0]=='Interpolé'
     assert curve_value_origin(result)=='Extrapolé'
 

@@ -30,8 +30,8 @@ TIME_UNIT_DAYS = {'days':1.0, 'months':365.25/12, 'years':365.25}
 # One comparison convention is applied to every datasheet projection. It
 # varies the ageing speed, not the module itself, so the time-to-threshold
 # interval remains readable and comparable across material families.
-STANDARD_RATE_SLOW_MULTIPLIER = .80
-STANDARD_RATE_FAST_MULTIPLIER = 1.20
+STANDARD_RATE_SLOW_MULTIPLIER = .90
+STANDARD_RATE_FAST_MULTIPLIER = 1.10
 
 def duration_to_days(value: float, unit: str) -> float:
     """Convert a positive UI duration to days using a documented mean calendar year."""
@@ -491,7 +491,7 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
                      'predictive_interval_validated':False,'display_band':True,
                      'excludes':['dispersion expérimentale','transfert de formulation','incertitude prédictive']}
 
-    # Uniform comparison layer: every material uses the same ±20 % change in
+    # Uniform comparison layer: every material uses the same ±10 % change in
     # ageing speed. Source-specific uncertainty is retained for scientific
     # traceability but no longer changes the main simulator band.
     source_uncertainty=uncertainty
@@ -507,10 +507,10 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
     high_rate=rate*STANDARD_RATE_FAST_MULTIPLIER
     uncertainty={
         'kind':'standardized_rate_sensitivity',
-        'label':'Plage standardisée ±20 % sur la vitesse',
+        'label':'Plage standardisée ±10 % sur la vitesse',
         'coverage':'même convention de comparaison pour tous les matériaux',
-        'interpretation':('La borne rapide applique ×1,20 à la vitesse de vieillissement et la borne lente '
-                          '×0,80. Cette plage uniforme facilite la comparaison ; elle ne constitue pas un '
+        'interpretation':('La borne rapide applique ×1,10 à la vitesse de vieillissement et la borne lente '
+                          '×0,90. Cette plage uniforme facilite la comparaison ; elle ne constitue pas un '
                           'intervalle de confiance universel.'),
         'predictive_interval_validated':False,'display_band':True,
         'rate_multipliers':[STANDARD_RATE_SLOW_MULTIPLIER,STANDARD_RATE_FAST_MULTIPLIER],
@@ -536,7 +536,7 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
         model_status='ESTIMATION DOCUMENTAIRE DE PRÉSÉLECTION - CONFIANCE LIMITÉE'
     if not evidence_calibrated:
         profile_warning=('Les facteurs température, humidité et épaisseur sont des hypothèses exploratoires ; '
-                         'la plage principale applique la convention commune ×0,80–×1,20 sur la vitesse.')
+                         'la plage principale applique la convention commune ×0,90–×1,10 sur la vitesse.')
     elif observed_profile.get('profile_kind')=='temperature_surface':
         profile_warning=('La température saisie n’a pas de courbe exacte : la bande est élargie à la pire erreur '
                          'du test masqué 100 °C (±26,24 %).') if temperature_transfer else (
@@ -583,7 +583,7 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
             'Le module initial ne détermine pas à lui seul la cinétique de vieillissement.',
             'La formulation, les additifs, le procédé et les contraintes mécaniques ne sont pas décrits.',
             (f"Le profil publié couvre {evidence_window_days:g} jours dans les conditions du scénario ; l’horizon demandé représente environ {extrapolation_multiple:.1f} fois cette durée." if evidence_calibrated
-             else 'La vitesse centrale provient de la famille documentaire ; la plage visible applique la convention commune ×0,80 à ×1,20.'),
+             else 'La vitesse centrale provient de la famille documentaire ; la plage visible applique la convention commune ×0,90 à ×1,10.'),
             profile_warning,
             ('En immersion, l’humidité relative de l’air est ignorée ; la nature du liquide, le pH, l’oxygène dissous et le renouvellement du bain ne sont pas modélisés.'
              if exposure=='immersion' else 'Le milieu est représenté par un facteur simplifié.'),
@@ -647,7 +647,7 @@ def evidence_assessment(result: dict) -> dict:
         'level':'Niveau 1 sur 4',
         'label':'Estimation documentaire de présélection',
         'tone':'amber',
-        'meaning':'La ligne centrale est la meilleure estimation disponible à partir de la famille du matériau, du module initial et des conditions saisies. La plage standardisée applique la même variation de vitesse ×0,80 à ×1,20 à tous les matériaux.',
+        'meaning':'La ligne centrale est la meilleure estimation disponible à partir de la famille du matériau, du module initial et des conditions saisies. La plage standardisée applique la même variation de vitesse ×0,90 à ×1,10 à tous les matériaux.',
         'allowed':'Utiliser la courbe centrale pour une première estimation et comparer des scénarios, en conservant le niveau de confiance limité.',
         'next_step':'Ajouter des séries temporelles traçables pour ce matériau et ces conditions.',
     }

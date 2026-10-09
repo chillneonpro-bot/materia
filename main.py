@@ -514,7 +514,7 @@ def datasheet_simulator(material: str | None=None):
                             else:
                                 result_cards=[
                                     ('Estimation centrale du temps au seuil',format_years_months(crossing),'Valeur de travail recommandée'),
-                                    ('Plage standardisée',f"{format_years_months(lo)} – {format_years_months(hi)}",'Même vitesse ×1,20 à ×0,80 pour tous'),
+                                    ('Plage standardisée',f"{format_years_months(lo)} – {format_years_months(hi)}",'Même vitesse ×1,10 à ×0,90 pour tous'),
                                     (f'Module estimé à {horizon_text}',f"{number_fr(result['modulus'][-1])} MPa",f"{number_fr(result['retention'][-1],1)} % du module initial"),
                                 ]
                             with ui.element('div').classes('result-grid w-full'):
@@ -537,7 +537,7 @@ def datasheet_simulator(material: str | None=None):
                                 band_mode.on_value_change(lambda:result_chart.refresh())
                             result_chart()
                             if informed:
-                                ui.label(f"Valeur à retenir : utilisez la courbe centrale. La plage principale applique la même variation de vitesse ×0,80–×1,20 à tous les matériaux. Les incertitudes propres à la source restent dans la rubrique scientifique. Sources compatibles : {match['score']}/100.").classes('note w-full')
+                                ui.label(f"Valeur à retenir : utilisez la courbe centrale. La plage principale applique la même variation de vitesse ×0,90–×1,10 à tous les matériaux. Les incertitudes propres à la source restent dans la rubrique scientifique. Sources compatibles : {match['score']}/100.").classes('note w-full')
                             else:
                                 ui.label(f"Valeur à retenir : {format_years_months(crossing)} pour atteindre {threshold.value:g} %. La plage {format_years_months(lo)}–{format_years_months(hi)} reste indicative.").classes('note w-full')
                             with ui.expansion('Afficher les valeurs de la courbe',icon='table_chart').classes('w-full'):
@@ -546,11 +546,11 @@ def datasheet_simulator(material: str | None=None):
                                 ui.label(f"Après {assumptions['evidence_window_days']:.0f} jours, la zone orangée signale une extrapolation.").classes('note w-full')
                             elif not assumptions['evidence_calibrated']:
                                 with ui.expansion('Comprendre la plage de sensibilité',icon='tune').classes('w-full'):
-                                    ui.label('La ligne centrale reste le résultat recommandé. Les deux bornes montrent l’effet de la même variation de vitesse de ±20 % pour chaque matériau. Elles ne sont pas des probabilités.').classes('field-help')
+                                    ui.label('La ligne centrale reste le résultat recommandé. Les deux bornes montrent l’effet de la même variation de vitesse de ±10 % pour chaque matériau. Elles ne sont pas des probabilités.').classes('field-help')
                                     table_rows([
-                                        {'scenario':'Vieillissement plus rapide · vitesse ×1,20','franchissement':format_years_months(lo),'usage':'Borne standard basse'},
+                                        {'scenario':'Vieillissement plus rapide · vitesse ×1,10','franchissement':format_years_months(lo),'usage':'Borne standard basse'},
                                         {'scenario':'Estimation centrale · vitesse ×1','franchissement':format_years_months(crossing),'usage':'Valeur à utiliser'},
-                                        {'scenario':'Vieillissement plus lent · vitesse ×0,80','franchissement':format_years_months(hi),'usage':'Borne standard haute'},
+                                        {'scenario':'Vieillissement plus lent · vitesse ×0,90','franchissement':format_years_months(hi),'usage':'Borne standard haute'},
                                     ],['scenario','franchissement','usage'])
                             with ui.expansion('Planifier une campagne de validation',icon='event_note').classes('w-full'):
                                 ui.label('Materia propose les temps qui couvrent le départ, la fenêtre documentaire, le seuil central et l’horizon final.').classes('body-copy p-3 pb-0')
@@ -595,7 +595,7 @@ def datasheet_simulator(material: str | None=None):
                                         calibration=source_uncertainty['calibration']
                                         method_rows=[
                                             {'label':'Profil central','value':'Médiane de 3 publications','meaning':'Chaque publication compte une fois, quel que soit son nombre de formulations'},
-                                            {'label':'Plage principale','value':'Vitesse ×0,80 à ×1,20','meaning':'Convention identique pour tous les matériaux'},
+                                            {'label':'Plage principale','value':'Vitesse ×0,90 à ×1,10','meaning':'Convention identique pour tous les matériaux'},
                                             {'label':'Incertitude de la source','value':('P10–P90 pilote' if scientific_uncertainty_kind=='source_level_predictive_interval' else 'Sensibilité documentaire'),
                                              'meaning':('Résidus obtenus en laissant une publication entière de côté' if scientific_uncertainty_kind=='source_level_predictive_interval' else 'Information conservée pour la validité scientifique')},
                                             {'label':'Fenêtre commune','value':f"0–{assumptions['evidence_window_days']:.0f} jours",'meaning':'Aucune source n’est extrapolée pendant le calibrage'},
@@ -606,7 +606,7 @@ def datasheet_simulator(material: str | None=None):
                                     elif scientific_uncertainty_kind in {'reported_standard_deviation','temperature_transfer_holdout'}:
                                         method_rows=[
                                             {'label':'Profil central','value':'Interpolation du tableau MDPI','meaning':'Courbes de module à 80, 100 et 120 °C, de 0 à 24 h'},
-                                            {'label':'Plage principale','value':'Vitesse ×0,80 à ×1,20','meaning':'Convention identique pour tous les matériaux'},
+                                            {'label':'Plage principale','value':'Vitesse ×0,90 à ×1,10','meaning':'Convention identique pour tous les matériaux'},
                                             {'label':'Incertitude de la source','value':source_uncertainty.get('label','Non renseignée'),'meaning':'Conservée séparément pour l’audit scientifique'},
                                             {'label':'Domaine strict','value':'Milform 64 SST · 80–120 °C · 0–24 h','meaning':'Aucun transfert vers l’eau, un autre liquide ou 23 °C'},
                                         ]
@@ -616,7 +616,7 @@ def datasheet_simulator(material: str | None=None):
                                             {'label':'Cas de référence','value':'PP H301 · 4 formulations','meaning':'Tableau 2, 0, 30 et 120 jours, sept éprouvettes par point'},
                                             {'label':'Test hors formulation','value':f"{calibration['test_predictions']} prédictions masquées",'meaning':'La formulation cible ne participe jamais au calcul de sa propre rétention'},
                                             {'label':'Erreur relative moyenne','value':f"{number_fr(calibration['mape_pct'],2)} %",'meaning':'Comparaison directe entre modules prédits et modules publiés'},
-                                            {'label':'Plage principale','value':'Vitesse ×0,80 à ×1,20','meaning':'Convention identique pour tous les matériaux'},
+                                            {'label':'Plage principale','value':'Vitesse ×0,90 à ×1,10','meaning':'Convention identique pour tous les matériaux'},
                                             {'label':'Erreur source dans la fenêtre','value':f"± {number_fr(calibration['empirical_half_width_pct'],2)} %",'meaning':'Erreur relative maximale des huit prédictions masquées, conservée pour l’audit'},
                                             {'label':'Couverture interne','value':f"{number_fr(calibration['empirical_point_coverage_pct'],0)} %",'meaning':'Couverture observée sur les huit valeurs masquées ; pas une garantie externe'},
                                             {'label':'Après 120 jours','value':'Information documentaire conservée' if scientific_uncertainty_kind=='observed_rate_envelope_extrapolation' else 'Non applicable','meaning':'La plage visible reste standardisée'},
@@ -639,7 +639,7 @@ def datasheet_simulator(material: str | None=None):
                                         {'label':'Facteur température','value':f"× {assumptions['temperature_factor']:.2f}",'meaning':'Doublement par tranche de 10 °C'},
                                         {'label':'Facteur humidité','value':f"× {assumptions['humidity_factor']:.2f}",'meaning':'Selon les mécanismes déclarés'},
                                         {'label':'Facteur milieu','value':f"× {assumptions['environment_factor']:.2f}",'meaning':'Intérieur, extérieur ou immersion'},
-                                        {'label':'Plage standardisée','value':'Vitesse ×0,80 à ×1,20','meaning':'Même convention pour chaque matériau et chaque comparaison'},
+                                        {'label':'Plage standardisée','value':'Vitesse ×0,90 à ×1,10','meaning':'Même convention pour chaque matériau et chaque comparaison'},
                                     ]
                                 method_rows.append({'label':'Empreinte du calcul','value':result['fingerprint'][:16]+'…','meaning':'Identifie exactement les hypothèses'})
                                 table_rows(method_rows,['label','value','meaning'])

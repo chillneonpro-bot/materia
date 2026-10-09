@@ -2,7 +2,7 @@
 
 **Python 3.11–3.13 · Windows · macOS · Linux · Docker**
 
-Version actuelle : **0.42.0**. Materia est prêt à être distribué dans un dépôt GitHub : lancement assisté sur macOS et Windows, image Docker, données persistantes et tests automatiques sur les trois systèmes. Voir le [guide utilisateur illustré en PDF](docs/Guide_utilisateur_Materia_v0.38.pdf), sa [version Word modifiable](docs/Guide_utilisateur_Materia_v0.38.docx), [l'installation complète](docs/INSTALLATION.md), [l'étude de validation PP H301](docs/ETUDE_VALIDATION_PP_H301_V0.40.md), [l'étude IIR et lin/époxy](docs/ETUDE_VALIDATION_IIR_LIN_EPOXY_V0.41.md), [la plage uniforme v0.42](docs/MISE_A_JOUR_V0.42.md) et [la mise à jour du catalogue v0.39](docs/MISE_A_JOUR_V0.39.md).
+Version actuelle : **0.43.0**. Materia est prêt à être distribué dans un dépôt GitHub : lancement assisté sur macOS et Windows, image Docker, données persistantes et tests automatiques sur les trois systèmes. Voir le [guide utilisateur illustré en PDF](docs/Guide_utilisateur_Materia_v0.38.pdf), sa [version Word modifiable](docs/Guide_utilisateur_Materia_v0.38.docx), [l'installation complète](docs/INSTALLATION.md), [l'étude de validation PP H301](docs/ETUDE_VALIDATION_PP_H301_V0.40.md), [l'étude IIR et lin/époxy](docs/ETUDE_VALIDATION_IIR_LIN_EPOXY_V0.41.md), [la plage uniforme v0.42](docs/MISE_A_JOUR_V0.42.md), [son resserrement v0.43](docs/MISE_A_JOUR_V0.43.md) et [la mise à jour du catalogue v0.39](docs/MISE_A_JOUR_V0.39.md).
 
 Application Python de découverte et d'exploration du vieillissement des polymères. Interface NiceGUI, graphiques Plotly, calcul NumPy/SciPy et persistance SQLite.
 

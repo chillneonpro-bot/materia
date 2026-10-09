@@ -411,7 +411,7 @@ def uncertainty_budget(result: dict) -> list[dict]:
                      'meaning':'Aucune répétition compatible n’est disponible pour ce résultat.'})
     rows.append({'component':'Plage affichée à l’horizon','value':f'± {shown:.1f} % autour de la courbe centrale' if shown is not None else 'Non calculable',
                  'quantified':shown is not None,
-                 'meaning':'Convention commune ×0,80–×1,20 sur la vitesse ; largeur en module variable avec le temps.'})
+                 'meaning':'Convention commune ×0,90–×1,10 sur la vitesse ; largeur en module variable avec le temps.'})
     if model.startswith('datasheet-screening-'):
         assumptions=manifest.get('assumptions',{}); multiple=assumptions.get('extrapolation_multiple')
         rows.append({'component':'Extrapolation temporelle','value':f'× {multiple:.1f} la durée observée' if _finite(multiple) else 'Non quantifiée',
