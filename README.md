@@ -2,7 +2,7 @@
 
 **Python 3.11–3.13 · Windows · macOS · Linux · Docker**
 
-Version actuelle : **0.39.0**. Materia est prêt à être distribué dans un dépôt GitHub : lancement assisté sur macOS et Windows, image Docker, données persistantes et tests automatiques sur les trois systèmes. Voir le [guide utilisateur illustré en PDF](docs/Guide_utilisateur_Materia_v0.38.pdf), sa [version Word modifiable](docs/Guide_utilisateur_Materia_v0.38.docx), [l'installation complète](docs/INSTALLATION.md), [la mise à jour v0.39](docs/MISE_A_JOUR_V0.39.md) et [la distribution v0.38](docs/MISE_A_JOUR_V0.38.md).
+Version actuelle : **0.40.0**. Materia est prêt à être distribué dans un dépôt GitHub : lancement assisté sur macOS et Windows, image Docker, données persistantes et tests automatiques sur les trois systèmes. Voir le [guide utilisateur illustré en PDF](docs/Guide_utilisateur_Materia_v0.38.pdf), sa [version Word modifiable](docs/Guide_utilisateur_Materia_v0.38.docx), [l'installation complète](docs/INSTALLATION.md), [l'étude de validation PP H301](docs/ETUDE_VALIDATION_PP_H301_V0.40.md) et [la mise à jour du catalogue v0.39](docs/MISE_A_JOUR_V0.39.md).
 
 Application Python de découverte et d'exploration du vieillissement des polymères. Interface NiceGUI, graphiques Plotly, calcul NumPy/SciPy et persistance SQLite.
 
@@ -40,6 +40,7 @@ GitHub Pages ne peut pas exécuter cette application Python. Pour obtenir cette 
 - Fiche matériau : estimation centrale sur les 75 fiches à partir du module initial, de la température, de l'humidité, de l'épaisseur et du milieu. Un module fabricant recoupé est proposé lorsqu’il existe ; la cinétique reste explicitement séparée. Le rapport affiche le niveau de preuve, les facteurs, les limites, une table accessible et une empreinte reproductible.
 - Mesures publiées : quatre formulations PP issues du tableau MDPI sont tracées avec leur écart-type. L’interpolation reste limitée à 0–120 jours et l’extrapolation est bloquée.
 - Preuves MDPI : 12 valeurs exactes de module du PP, issues de quatre formulations suivies à 0, 30 et 120 jours, recalibrent la courbe extérieure et sa plage inter-formulations.
+- Cas PP H301 : validation hors formulation sans mesure de vieillissement cible, huit prédictions masquées, erreur relative moyenne de 2,75 % et bande empirique interne de ±3,41 % entre 0 et 120 jours.
 - Comparer : un à quatre matériaux ou simulations enregistrées ; axes communs.
 - Mes projets : retrouver les résultats avec la version conservée, exporter un classeur Excel illustré ou un rapport étudiant lisible, archiver ou supprimer les projets.
 - Mon compte : compte local étudiant ou enseignant, mot de passe haché, conservation des projets entre navigateurs et droits adaptés au profil.

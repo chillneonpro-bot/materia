@@ -108,6 +108,118 @@ def pp_model_benchmark(rows: list[dict]) -> dict:
     }
 
 
+def pp_literature_only_benchmark(rows: list[dict]) -> dict:
+    """Validate a PP reference curve without using target ageing measurements.
+
+    Each formulation is removed in turn. Its E0 is retained because that value
+    comes from the material card; normalized retention at 30 and 120 days is
+    estimated only from the other three formulations. This mirrors the actual
+    zero-new-experiment use case more closely than the two-phase benchmark.
+    """
+    direct=[row for row in rows if row.get('source_id')=='mdpi-pp-natural-aging-2024']
+    groups={experiment_id:sorted((r for r in direct if r['experiment_id']==experiment_id),
+                                  key=lambda r:float(r['time_days']))
+            for experiment_id in sorted({r['experiment_id'] for r in direct})}
+    groups={key:value for key,value in groups.items() if _pp_anchor_values(value) is not None}
+    if len(groups)<4:
+        raise ValueError('Les quatre formulations PP H301 complètes sont requises.')
+    details=[]
+    for experiment_id,group in groups.items():
+        e0,e30,e120=_pp_anchor_values(group)
+        peers=[_pp_anchor_values(peer) for key,peer in groups.items() if key!=experiment_id]
+        for day,observed,index in ((30.,e30,1),(120.,e120,2)):
+            peer_retention=float(np.median([peer[index]/peer[0] for peer in peers]))
+            predicted=float(e0*peer_retention)
+            relative_error=abs(predicted-observed)/observed*100
+            details.append({
+                'formulation':experiment_id,'time_days':day,'initial_mpa':e0,
+                'observed_mpa':observed,'predicted_mpa':predicted,
+                'error_mpa':predicted-observed,'absolute_error_mpa':abs(predicted-observed),
+                'relative_error_pct':relative_error,'peer_retention':peer_retention,
+                'test_sd_mpa':float(group[index].get('standard_deviation_mpa') or 0),
+            })
+    metrics=_error_metrics(details)
+    relative_residuals=np.asarray([row['relative_error_pct'] for row in details],dtype=float)
+    # With only eight held-out points, the finite-sample 80% conformal rank is
+    # the maximum residual. Keeping the unrounded value preserves exact auditability.
+    alpha=.2; rank=min(len(relative_residuals),int(math.ceil((len(relative_residuals)+1)*(1-alpha))))
+    half_width_pct=float(np.sort(relative_residuals)[rank-1])
+    coverage=float(np.mean(relative_residuals<=half_width_pct+1e-12)*100)
+    by_day={}
+    for day in (30.,120.):
+        subset=[row for row in details if row['time_days']==day]
+        by_day[str(int(day))]={**_error_metrics(subset),'count':len(subset)}
+    anchors=[]; late_rates=[]
+    for group in groups.values():
+        e0,e30,e120=_pp_anchor_values(group)
+        anchors.append([1.,e30/e0,e120/e0])
+        late_rates.append(float(np.log(e30/e120)/90))
+    anchors=np.asarray(anchors,dtype=float)
+    return {
+        'method':'Rétention médiane des trois formulations paires',
+        'protocol':('Chaque formulation est masquée entièrement. Materia conserve uniquement son module initial E0, '
+                    'puis prédit E30 et E120 avec les rétentions médianes des trois autres formulations.'),
+        'independence':'Validation interne hors formulation, une publication et quatre formulations PP H301',
+        **metrics,'details':details,'test_count':len(details),'by_day':by_day,
+        'target_coverage_pct':80.,'empirical_coverage_pct':coverage,
+        'empirical_half_width_pct':half_width_pct,
+        'profile':{
+            'times_days':[0.,30.,120.],
+            'median_retention':np.median(anchors,axis=0).tolist(),
+            'observed_min_retention':np.min(anchors,axis=0).tolist(),
+            'observed_max_retention':np.max(anchors,axis=0).tolist(),
+            'late_rate_median_per_day':float(np.median(late_rates)),
+            'late_rate_min_per_day':float(np.min(late_rates)),
+            'late_rate_max_per_day':float(np.max(late_rates)),
+        },
+        'status':'CALIBRAGE INTERNE SANS MESURE DE VIEILLISSEMENT CIBLE',
+        'conclusion':('Dans ce cas PP H301, une courbe fondée sur la littérature seule atteint une erreur relative '
+                      'moyenne inférieure à 3 % à 30 et 120 jours. La bande empirique est valable comme contrôle '
+                      'interne du cas étudié ; son transfert à un autre grade ou au-delà de 120 jours reste à confirmer.'),
+    }
+
+
+def pp_h301_reference_profile(rows: list[dict]) -> dict | None:
+    """Return the internally calibrated PP H301 profile used by the simulator."""
+    try:
+        report=pp_literature_only_benchmark(rows)
+    except ValueError:
+        return None
+    profile=report['profile']; center=np.asarray(profile['median_retention'],dtype=float)
+    half=report['empirical_half_width_pct']/100
+    lower=center.copy(); upper=center.copy()
+    lower[1:]*=1-half; upper[1:]*=1+half
+    direct=[row for row in rows if row.get('source_id')=='mdpi-pp-natural-aging-2024']
+    first=direct[0]
+    return {
+        'times':np.asarray(profile['times_days'],dtype=float),'median':center,
+        'lower':lower,'upper':upper,
+        'outer_lower':np.asarray(profile['observed_min_retention'],dtype=float),
+        'outer_upper':np.asarray(profile['observed_max_retention'],dtype=float),
+        'late_rate':profile['late_rate_median_per_day'],
+        'late_rate_low':profile['late_rate_min_per_day'],
+        'late_rate_high':profile['late_rate_max_per_day'],
+        'outer_rate_low':profile['late_rate_min_per_day'],
+        'outer_rate_high':profile['late_rate_max_per_day'],
+        'experiments':4,'source_count':1,
+        'source_ids':['mdpi-pp-natural-aging-2024'],
+        'profile_kind':'same_study_formulation_holdout',
+        'calibration':{
+            'method':'leave-one-formulation-out, literature-only median retention',
+            'target_coverage_pct':report['target_coverage_pct'],
+            'empirical_point_coverage_pct':report['empirical_coverage_pct'],
+            'empirical_half_width_pct':report['empirical_half_width_pct'],
+            'mape_pct':report['mape_pct'],'mae_mpa':report['mae_mpa'],
+            'r2':report['r2'],'calibration_units':4,'test_predictions':8,
+        },
+        'source':{
+            'id':'mdpi-pp-natural-aging-2024','title':first.get('source_title'),
+            'url':first.get('source_url'),'doi':first.get('source_doi'),
+            'location':'Tableau 2, quatre formulations PP H301, 0–30–120 jours, n=7',
+        },
+    }
+
+
 def pp_short_term_prediction(initial_mpa: float, day30_mpa: float, rows: list[dict]) -> dict:
     """Predict the 120-day mean after a 30-day anchor using the audited phase-ratio model."""
     if not _finite(initial_mpa) or not _finite(day30_mpa) or initial_mpa<=0 or day30_mpa<=0:
@@ -206,7 +318,7 @@ def validity_diagnostic(result: dict) -> dict:
         conclusion='Interpolation utilisable pour l’enseignement dans le domaine observé.' if accepted else 'Ce résultat ne peut pas servir de preuve.'
         recommendation='Ajouter une campagne indépendante et les données brutes par éprouvette.'
     elif model.startswith('datasheet-screening-'):
-        calibrated=manifest.get('evidence_level') in {'calibrated_short_term','evidence_informed_short_term'}
+        calibrated=manifest.get('evidence_level') in {'case_calibrated_short_term','calibrated_short_term','evidence_informed_short_term'}
         multiple=(manifest.get('assumptions') or {}).get('extrapolation_multiple')
         if calibrated and _finite(multiple):
             time_status='bon' if multiple<=1 else 'attention' if multiple<=3 else 'bloquant'

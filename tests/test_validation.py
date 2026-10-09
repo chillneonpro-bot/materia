@@ -1,9 +1,10 @@
 import math
+import pytest
 
 from materia import material_db
 from materia.modeling import estimate_from_datasheet, published_evidence_curve, standard_profile
 from materia.validation import (pp_model_benchmark, pp_short_term_prediction,
-                                pp_temporal_holdout, uncertainty_budget,
+                                pp_literature_only_benchmark, pp_temporal_holdout, uncertainty_budget,
                                 validity_diagnostic)
 
 
@@ -26,6 +27,18 @@ def test_pp_benchmark_and_short_term_interval_are_honest_and_tight():
     assert prediction['lower_120_mpa']<prediction['predicted_120_mpa']<prediction['upper_120_mpa']
     assert prediction['empirical_half_width_pct']<2.1
     assert 'VALIDATION EXTERNE' in prediction['status']
+
+
+def test_pp_literature_only_case_is_checked_without_target_ageing_measurements():
+    report=pp_literature_only_benchmark(material_db.evidence_rows('PP','outdoor'))
+    assert report['test_count']==8
+    assert report['mape_pct']==pytest.approx(2.7498356554)
+    assert report['mae_mpa']==pytest.approx(13.7214843983)
+    assert report['empirical_half_width_pct']==pytest.approx(3.4109767496)
+    assert report['empirical_coverage_pct']==100
+    assert report['by_day']['30']['mape_pct']==pytest.approx(2.7184879264)
+    assert report['by_day']['120']['mape_pct']==pytest.approx(2.7811833843)
+    assert all(row['relative_error_pct']<=report['empirical_half_width_pct']+1e-12 for row in report['details'])
 
 
 def test_pp_benchmark_uses_named_time_anchors_when_extra_rows_exist():

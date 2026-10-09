@@ -342,14 +342,27 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
     if exposure=='immersion':
         wanted={'milform64':'milform 64 sst','Milform 64 SST':'milform 64 sst'}.get(immersion_medium)
         compatible_rows=[r for r in compatible_rows if wanted and wanted in str(r.get('medium','')).lower()]
-    observed_profile=((_literature_ensemble_profile(compatible_rows) or _evidence_profile(compatible_rows)) if exposure=='outdoor' else
-                      _temperature_surface_profile(compatible_rows,temperature_c) if exposure=='immersion' else None)
+    if exposure=='outdoor':
+        # PP has one homogeneous, directly tabulated case with four related
+        # formulations. Prefer its held-out formulation benchmark to a broad
+        # mixture of unrelated climates and grades.
+        if str(material.get('id','')).upper()=='PP':
+            from materia.validation import pp_h301_reference_profile
+            observed_profile=(pp_h301_reference_profile(compatible_rows)
+                              or _literature_ensemble_profile(compatible_rows)
+                              or _evidence_profile(compatible_rows))
+        else:
+            observed_profile=_literature_ensemble_profile(compatible_rows) or _evidence_profile(compatible_rows)
+    elif exposure=='immersion':
+        observed_profile=_temperature_surface_profile(compatible_rows,temperature_c)
+    else:
+        observed_profile=None
     evidence_calibrated=observed_profile is not None
     match=_evidence_match_score(observed_profile,compatible_rows,temperature_c,humidity_rh,thickness_mm)
     if evidence_calibrated:
         # Natural weathering is represented by a normalized observed profile. Temperature is only a
         # scenario time-warp; its Q10 value is not fitted by the publication and remains explicit.
-        transfer_factor=(1. if observed_profile.get('profile_kind') in {'temperature_surface','source_ensemble'}
+        transfer_factor=(1. if observed_profile.get('profile_kind') in {'temperature_surface','source_ensemble','same_study_formulation_holdout'}
                          else float(temp_factor))
         effective_days=days*transfer_factor
         center_ret=_profile_curve(effective_days,observed_profile['times'],observed_profile['median'],observed_profile['late_rate'])
@@ -375,11 +388,13 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
         predictive_interval_validated=observed_profile['source_count']>=3
         surface=observed_profile.get('profile_kind')=='temperature_surface'
         ensemble=observed_profile.get('profile_kind')=='source_ensemble'
-        uncertainty={'kind':'reported_standard_deviation' if surface else 'source_level_predictive_interval' if ensemble else 'internal_formulation_iqr',
-                     'label':'Dispersion publiée ±1 écart-type' if surface else 'Intervalle prédictif pilote P10–P90' if ensemble else f"Dispersion centrale des {observed_profile['experiments']} formulations",
-                     'coverage':'dispersion des mesures publiées' if surface else f"{observed_profile['calibration']['empirical_point_coverage_pct']:.1f} % observés en validation hors source" if ensemble else '50 % central du corpus aux temps observés',
-                     'interpretation':'Écart-type rapporté dans le tableau source ; il ne couvre pas le transfert vers un autre liquide ou une autre formulation.' if surface else 'Quantiles asymétriques des erreurs logarithmiques obtenues en laissant chaque publication entière de côté. Le corpus minimal de trois sources rend encore la couverture incertaine.' if ensemble else 'Zone centrale entre les quartiles 25 % et 75 %. L’enveloppe min-max complète reste indiquée dans les hypothèses.',
-                     'predictive_interval_validated':predictive_interval_validated,
+        case_profile=observed_profile.get('profile_kind')=='same_study_formulation_holdout'
+        uncertainty={'kind':'reported_standard_deviation' if surface else 'source_level_predictive_interval' if ensemble else 'internal_holdout_interval' if case_profile else 'internal_formulation_iqr',
+                     'label':'Dispersion publiée ±1 écart-type' if surface else 'Intervalle prédictif pilote P10–P90' if ensemble else 'Bande empirique 80 % du cas PP H301' if case_profile else f"Dispersion centrale des {observed_profile['experiments']} formulations",
+                     'coverage':'dispersion des mesures publiées' if surface else f"{observed_profile['calibration']['empirical_point_coverage_pct']:.1f} % observés en validation hors source" if ensemble else f"{observed_profile['calibration']['empirical_point_coverage_pct']:.1f} % sur 8 prédictions hors formulation" if case_profile else '50 % central du corpus aux temps observés',
+                     'interpretation':'Écart-type rapporté dans le tableau source ; il ne couvre pas le transfert vers un autre liquide ou une autre formulation.' if surface else 'Quantiles asymétriques des erreurs logarithmiques obtenues en laissant chaque publication entière de côté. Le corpus minimal de trois sources rend encore la couverture incertaine.' if ensemble else 'Largeur issue de l’erreur relative maximale observée lorsque chaque formulation PP H301 est masquée à tour de rôle. Elle est calibrée en interne à 0–120 jours.' if case_profile else 'Zone centrale entre les quartiles 25 % et 75 %. L’enveloppe min-max complète reste indiquée dans les hypothèses.',
+                     'predictive_interval_validated':predictive_interval_validated and not case_profile,
+                     'internally_calibrated':case_profile,
                      'display_band':True,
                      'outer_band_available':not surface,
                      'outer_band_label':'Enveloppe complète min–max observée' if not surface else None,
@@ -419,6 +434,20 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
                 'sensitivity_multipliers':[.65,1.5],
                 'excludes':['couverture statistique après la fenêtre publiée','transfert vers un autre grade','autre climat','variabilité entre lots'],
             }
+        elif case_profile and horizon_years*365.25>evidence_window_days:
+            uncertainty={
+                'kind':'observed_rate_envelope_extrapolation',
+                'label':'Bande PP H301, élargie par les vitesses observées',
+                'coverage':'80 % interne jusqu’à 120 jours ; sensibilité au-delà',
+                'interpretation':('Jusqu’à 120 jours, la largeur vient des huit erreurs hors formulation. '
+                                  'Après 120 jours, les bornes prolongent les vitesses tardives minimale et maximale '
+                                  'mesurées sur les quatre formulations, sans prétendre à une couverture statistique.'),
+                'predictive_interval_validated':False,
+                'internally_calibrated':True,'display_band':True,
+                'calibration':observed_profile.get('calibration'),
+                'sensitivity_rate_bounds_per_day':[observed_profile['late_rate_low'],observed_profile['late_rate_high']],
+                'excludes':['validation après 120 jours','transfert vers un autre grade','autre climat','variabilité entre lots'],
+            }
     else:
         # A literature-family transfer remains uncertain, but the former ÷3/×3
         # sensitivity made the estimate unreadable. These multipliers keep a
@@ -437,10 +466,13 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
                      'predictive_interval_validated':False,'display_band':True,
                      'excludes':['dispersion expérimentale','transfert de formulation','incertitude prédictive']}
     extrapolation_multiple=(horizon_years*365.25/evidence_window_days if evidence_calibrated and evidence_window_days else None)
-    evidence_level=('calibrated_short_term' if evidence_calibrated and observed_profile.get('profile_kind')=='source_ensemble'
+    evidence_level=('case_calibrated_short_term' if evidence_calibrated and observed_profile.get('profile_kind')=='same_study_formulation_holdout'
+                    else 'calibrated_short_term' if evidence_calibrated and observed_profile.get('profile_kind')=='source_ensemble'
                     else 'evidence_informed_short_term' if evidence_calibrated else 'exploratory_family_assumptions')
     if evidence_calibrated and extrapolation_multiple<=1:
-        model_status=('INTERVALLE PILOTE CALIBRÉ HORS ÉTUDE - CORPUS MINIMAL'
+        model_status=('CAS PP H301 CALIBRÉ HORS FORMULATION - FENÊTRE 0 À 120 JOURS'
+                      if observed_profile.get('profile_kind')=='same_study_formulation_holdout' else
+                      'INTERVALLE PILOTE CALIBRÉ HORS ÉTUDE - CORPUS MINIMAL'
                       if observed_profile.get('profile_kind')=='source_ensemble' else
                       'PROFIL DOCUMENTAIRE DANS LA FENÊTRE PUBLIÉE - TRANSFERT DE GRADE NON VALIDÉ')
     elif evidence_calibrated and extrapolation_multiple<=3:
@@ -449,7 +481,7 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
         model_status='HORS DOMAINE DE PREUVE - SCÉNARIO PÉDAGOGIQUE UNIQUEMENT'
     else:
         model_status='ESTIMATION DOCUMENTAIRE DE PRÉSÉLECTION - CONFIANCE LIMITÉE'
-    manifest={'model':'datasheet-screening-v4','dataset':'verified-literature-plus-material-card',
+    manifest={'model':'datasheet-screening-v5','dataset':'verified-literature-plus-material-card',
         'material_id':material['id'],'material_name':material['name'],
         'target_property':material.get('target_property') or 'Module de Young',
         'inputs':{'e0':modulus_mpa,'temperature':temperature_c,'humidity_RH':humidity_rh,
@@ -462,7 +494,7 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
                        'evidence_calibrated':evidence_calibrated,'evidence_experiments':observed_profile['experiments'] if evidence_calibrated else 0,
                        'independent_sources':observed_profile['source_count'] if evidence_calibrated else 0,
                        'documentary_match':match,
-                       'profile_method':(('surface température-temps publiée, interpolation dans le domaine' if observed_profile.get('profile_kind')=='temperature_surface' else 'médiane inter-études normalisée et calibration leave-one-source-out' if observed_profile.get('profile_kind')=='source_ensemble' else 'médiane normalisée 0-30-120 jours puis vitesse tardive') if evidence_calibrated else None),
+                       'profile_method':(('surface température-temps publiée, interpolation dans le domaine' if observed_profile.get('profile_kind')=='temperature_surface' else 'médiane inter-études normalisée et calibration leave-one-source-out' if observed_profile.get('profile_kind')=='source_ensemble' else 'rétention médiane PP H301 et validation leave-one-formulation-out' if observed_profile.get('profile_kind')=='same_study_formulation_holdout' else 'médiane normalisée 0-30-120 jours puis vitesse tardive') if evidence_calibrated else None),
                        'evidence_window_days':evidence_window_days,
                        'extrapolation_multiple':extrapolation_multiple,
                        'rate_bounds_per_day':[low_rate,high_rate],
@@ -482,7 +514,7 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
             'La formulation, les additifs, le procédé et les contraintes mécaniques ne sont pas décrits.',
             (f"Le profil publié couvre {evidence_window_days:g} jours dans les conditions du scénario ; l’horizon demandé représente environ {extrapolation_multiple:.1f} fois cette durée." if evidence_calibrated
              else 'La vitesse centrale provient de la famille documentaire ; la plage de transfert utilise des multiplicateurs ×0,65 à ×1,50.'),
-            (('La température est interpolée uniquement entre les courbes publiées ; aucun transfert sous 80 °C ou au-dessus de 120 °C.' if observed_profile.get('profile_kind')=='temperature_surface' else 'Les climats naturels des publications sont conservés tels quels ; la température, l’humidité et l’épaisseur saisies ne corrigent pas encore cet ensemble.' if observed_profile.get('profile_kind')=='source_ensemble' else 'Le facteur de température Q10 est une analyse de sensibilité non ajustée sur cette publication ; humidité et épaisseur ne sont pas calibrées.') if evidence_calibrated
+            (('La température est interpolée uniquement entre les courbes publiées ; aucun transfert sous 80 °C ou au-dessus de 120 °C.' if observed_profile.get('profile_kind')=='temperature_surface' else 'Les climats naturels des publications sont conservés tels quels ; la température, l’humidité et l’épaisseur saisies ne corrigent pas encore cet ensemble.' if observed_profile.get('profile_kind')=='source_ensemble' else 'Le cas PP H301 est calibré sur quatre formulations d’une même publication ; au-delà de 120 jours, la bande prolonge les vitesses tardives extrêmes observées.' if observed_profile.get('profile_kind')=='same_study_formulation_holdout' else 'Le facteur de température Q10 est une analyse de sensibilité non ajustée sur cette publication ; humidité et épaisseur ne sont pas calibrées.') if evidence_calibrated
              else 'Les facteurs température, humidité et épaisseur sont des hypothèses exploratoires.'),
             ('En immersion, l’humidité relative de l’air est ignorée ; la nature du liquide, le pH, l’oxygène dissous et le renouvellement du bain ne sont pas modélisés.'
              if exposure=='immersion' else 'Le milieu est représenté par un facteur simplifié.'),
@@ -510,7 +542,7 @@ def evidence_assessment(result: dict) -> dict:
     """Return a student-readable assessment without inventing a precision score."""
     manifest=result.get('manifest',{})
     level=manifest.get('evidence_level')
-    if level in {'calibrated_short_term','evidence_informed_short_term'}:
+    if level in {'case_calibrated_short_term','calibrated_short_term','evidence_informed_short_term'}:
         multiple=(manifest.get('assumptions') or {}).get('extrapolation_multiple')
         if multiple is not None and multiple>3:
             return {
@@ -520,6 +552,17 @@ def evidence_assessment(result: dict) -> dict:
                 'meaning':f'L’horizon représente environ {multiple:.1f} fois la fenêtre comparable ; la courbe est un scénario, pas une prédiction qualifiée.',
                 'allowed':'Visualiser la conséquence des hypothèses et préparer une campagne plus longue.',
                 'next_step':'Allonger les observations ou réduire l’horizon avant toute interprétation de durée.',
+            }
+        if level=='case_calibrated_short_term':
+            calibration=(manifest.get('uncertainty') or {}).get('calibration') or {}
+            return {
+                'level':'Niveau 2 sur 4',
+                'label':'Cas PP H301 calibré hors formulation',
+                'tone':'teal',
+                'meaning':(f"La courbe a été contrôlée sur {calibration.get('test_predictions',8)} prédictions masquées ; "
+                           f"erreur relative moyenne {calibration.get('mape_pct',0):.2f} % dans la fenêtre publiée."),
+                'allowed':'Utiliser la courbe centrale et sa bande pour le cas PP H301 entre 0 et 120 jours.',
+                'next_step':'Valider le transfert si le grade, la formulation, le climat ou l’horizon diffèrent.',
             }
         if level=='calibrated_short_term':
             calibration=(manifest.get('uncertainty') or {}).get('calibration') or {}

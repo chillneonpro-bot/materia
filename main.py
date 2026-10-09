@@ -21,7 +21,8 @@ from materia.modeling import (evaluate_baselines, observed_projection, standard_
 from materia.charts import curve, comparison, base
 from materia.reporting import markdown_report
 from materia.pdf_reporting import evidence_card_pdf, result_pdf
-from materia.validation import pp_temporal_holdout, pp_short_term_prediction, validity_diagnostic
+from materia.validation import (pp_literature_only_benchmark, pp_temporal_holdout,
+    pp_short_term_prediction, validity_diagnostic)
 from materia.blind_prediction import compare_with_experiment, freeze_prediction, parse_validation_file
 from materia.readiness import comparison_assessment, preparation_assessment
 from materia.planning import experiment_plan, experiment_plan_workbook
@@ -537,7 +538,11 @@ def datasheet_simulator(material: str | None=None):
                                 band_mode.on_value_change(lambda:result_chart.refresh())
                             result_chart()
                             if informed:
-                                guidance=("Utilisez la courbe P50. Pour un scénario prudent, utilisez P10 ; sa couverture reste pilote."
+                                guidance=("Utilisez la courbe centrale. La bande ±3,41 % est calibrée en interne sur huit prédictions PP H301 masquées."
+                                    if uncertainty_kind=='internal_holdout_interval' else
+                                    "Utilisez la courbe centrale. Après 120 jours, les bornes prolongent les vitesses extrêmes réellement observées."
+                                    if uncertainty_kind=='observed_rate_envelope_extrapolation' else
+                                    "Utilisez la courbe P50. Pour un scénario prudent, utilisez P10 ; sa couverture reste pilote."
                                     if interval_validated else
                                     "Utilisez la courbe P50. Les bornes montrent la sensibilité de l’extrapolation."
                                     if uncertainty_kind=='extrapolation_sensitivity' else
@@ -613,6 +618,16 @@ def datasheet_simulator(material: str | None=None):
                                             {'label':'Bande affichée','value':'±1 écart-type publié','meaning':'Dispersion des mesures de l’article ; pas un intervalle prédictif'},
                                             {'label':'Domaine strict','value':'Milform 64 SST · 80–120 °C · 0–24 h','meaning':'Aucun transfert vers l’eau, un autre liquide ou 23 °C'},
                                         ]
+                                    elif uncertainty_kind in {'internal_holdout_interval','observed_rate_envelope_extrapolation'}:
+                                        calibration=result['manifest']['uncertainty']['calibration']
+                                        method_rows=[
+                                            {'label':'Cas de référence','value':'PP H301 · 4 formulations','meaning':'Tableau 2, 0, 30 et 120 jours, sept éprouvettes par point'},
+                                            {'label':'Test hors formulation','value':f"{calibration['test_predictions']} prédictions masquées",'meaning':'La formulation cible ne participe jamais au calcul de sa propre rétention'},
+                                            {'label':'Erreur relative moyenne','value':f"{number_fr(calibration['mape_pct'],2)} %",'meaning':'Comparaison directe entre modules prédits et modules publiés'},
+                                            {'label':'Bande dans la fenêtre','value':f"± {number_fr(calibration['empirical_half_width_pct'],2)} %",'meaning':'Erreur relative maximale des huit prédictions masquées'},
+                                            {'label':'Couverture interne','value':f"{number_fr(calibration['empirical_point_coverage_pct'],0)} %",'meaning':'Couverture observée sur les huit valeurs masquées ; pas une garantie externe'},
+                                            {'label':'Après 120 jours','value':'Vitesses min–max observées' if uncertainty_kind=='observed_rate_envelope_extrapolation' else 'Non applicable','meaning':'Extrapolation signalée et élargie avec les quatre cinétiques tardives'},
+                                        ]
                                     else:
                                         method_rows=[
                                             {'label':'Profil central','value':'Médiane de 4 formulations','meaning':'Mesures normalisées à 0, 30 et 120 jours'},
@@ -622,7 +637,7 @@ def datasheet_simulator(material: str | None=None):
                                             {'label':'Humidité et épaisseur','value':'Non calibrées','meaning':'Affichées dans le scénario, sans correction du profil PP'},
                                         ]
                                     method_rows += [
-                                        {'label':'Sources indépendantes','value':str(assumptions['independent_sources']),'meaning':'3 minimum exigées avant de parler d’intervalle prédictif calibré'},
+                                        {'label':'Sources indépendantes','value':str(assumptions['independent_sources']),'meaning':'Une publication homogène pour le cas PP H301 ; plusieurs publications compatibles restent nécessaires pour valider le transfert' if uncertainty_kind in {'internal_holdout_interval','observed_rate_envelope_extrapolation'} else '3 minimum exigées avant de parler d’intervalle prédictif calibré'},
                                         {'label':'Correspondance documentaire','value':f"{match['score']}/100",'meaning':match['meaning']},
                                     ]
                                 else:
@@ -1120,35 +1135,41 @@ def compare():
 @ui.page('/validite')
 def validity_page():
     rows=material_db.evidence_rows('PP','outdoor')
+    literature_report=pp_literature_only_benchmark(rows)
     report=pp_temporal_holdout(rows)
     with shell('/validite','Validité scientifique'):
         intro('Contrôle scientifique','Ce que Materia sait vraiment prédire',
-              'Cette page sépare le test interne, la validation indépendante et les domaines qui restent à couvrir.')
+              'Cette page compare les prédictions de Materia aux modules réellement publiés et sépare clairement la fenêtre vérifiée de l’extrapolation.')
         with ui.row().classes('w-full justify-end'):
             button('Comparer une prédiction figée','/validation-aveugle','fact_check').props('outline')
         with ui.element('div').classes('result-grid w-full mt-5'):
             for label,value,detail in [
-                ('Erreur absolue moyenne',f"{number_fr(report['mae_mpa'],1)} MPa",'Prédiction à 120 jours'),
-                ('Erreur relative moyenne',f"{number_fr(report['mape_pct'],2)} %",f"{report['test_count']} formulations laissées de côté"),
-                ('Enveloppe empirique',f"± {number_fr(report['empirical_half_width_pct'],1)} %",f"{report['within_reported_sd_count']} / {report['test_count']} dans la dispersion publiée"),
+                ('Erreur absolue moyenne',f"{number_fr(literature_report['mae_mpa'],1)} MPa",'Prédictions à 30 et 120 jours'),
+                ('Erreur relative moyenne',f"{number_fr(literature_report['mape_pct'],2)} %",f"{literature_report['test_count']} prédictions hors formulation"),
+                ('Bande empirique interne',f"± {number_fr(literature_report['empirical_half_width_pct'],1)} %",f"{number_fr(literature_report['empirical_coverage_pct'],0)} % des valeurs masquées couvertes"),
             ]:
                 with ui.column().classes('result-stat gap-1'):
                     ui.label(label).classes('stat-label'); ui.label(value).classes('result-value'); ui.label(detail).classes('small')
         with ui.column().classes('panel w-full mt-5 gap-4'):
             with ui.row().classes('w-full justify-between items-center'):
-                ui.label('Validation temporelle interne du PP').classes('section-title'); pill(report['status'],'pill-amber')
-            ui.label(report['method']).classes('body-copy')
-            ui.label(report['split']+' · '+report['independence']).classes('small')
+                ui.label('Cas de référence sans nouvelle expérience : PP H301').classes('section-title'); pill(literature_report['status'],'pill-teal')
+            ui.label(literature_report['method']).classes('body-copy')
+            ui.label(literature_report['protocol']+' · '+literature_report['independence']).classes('small')
             display_details=[{
                 'formulation':row['formulation'],
+                'time_days':int(row['time_days']),
                 'observed_mpa':round(row['observed_mpa'],1),
                 'predicted_mpa':round(row['predicted_mpa'],1),
                 'absolute_error_mpa':round(row['absolute_error_mpa'],1),
-                'relative_error_pct':round(row['relative_error_pct'],1),
-                'within_reported_sd':'Oui' if row['within_reported_sd'] else 'Non',
-            } for row in report['details']]
-            table_rows(display_details,['formulation','observed_mpa','predicted_mpa','absolute_error_mpa','relative_error_pct','within_reported_sd'])
-            ui.label(report['conclusion']).classes('note w-full')
+                'relative_error_pct':round(row['relative_error_pct'],2),
+                'covered':'Oui' if row['relative_error_pct']<=literature_report['empirical_half_width_pct']+1e-12 else 'Non',
+            } for row in literature_report['details']]
+            table_rows(display_details,['formulation','time_days','observed_mpa','predicted_mpa','absolute_error_mpa','relative_error_pct','covered'])
+            ui.label(literature_report['conclusion']).classes('note w-full')
+        with ui.column().classes('panel w-full mt-5 gap-4'):
+            ui.label('Contrôle complémentaire avec une mesure à 30 jours').classes('section-title')
+            ui.label(report['method']+' · '+report['split']).classes('body-copy')
+            ui.label(f"Lorsque E30 est disponible, l’erreur relative moyenne à 120 jours descend à {number_fr(report['mape_pct'],2)} %, avec une erreur maximale de {number_fr(report['empirical_half_width_pct'],2)} %. Cette méthode reste optionnelle.").classes('pill pill-teal')
         benchmark=report['benchmark']
         with ui.column().classes('panel w-full mt-5 gap-4'):
             ui.label('Comparer les lois avant de les utiliser').classes('section-title')
@@ -1205,14 +1226,14 @@ def validity_page():
             ui.label('Failles scientifiques encore ouvertes').classes('section-title')
             ui.label('Ces limites empêchent encore de qualifier une durée de vie :').classes('body-copy')
             table_rows([
-                {'priorite':'Critique','faille':'Validation externe absente','impact':'L’erreur de 0,77 % est interne à une seule publication.'},
+                {'priorite':'Critique','faille':'Validation externe absente','impact':'Les erreurs de 2,75 % sans mesure cible et de 0,77 % avec E30 restent internes à une seule publication.'},
                 {'priorite':'Critique','faille':'Transfert de grade non démontré','impact':'Additifs, procédé, cristallinité et lot peuvent changer la cinétique.'},
                 {'priorite':'Critique','faille':'Climat et Q10 non calibrés','impact':'Le passage température, humidité et UV reste une analyse de sensibilité.'},
                 {'priorite':'Haute','faille':'Seulement trois temps','impact':'Le changement de mécanisme ou l’induction peuvent rester invisibles.'},
                 {'priorite':'Haute','faille':'Valeurs brutes par éprouvette absentes','impact':'La couverture prédictive et la variabilité entre lots ne sont pas estimables.'},
                 {'priorite':'Haute','faille':'Un seul indicateur mécanique','impact':'Le module peut rester stable alors que l’allongement ou la résistance chutent.'},
             ],['priorite','faille','impact'])
-            ui.label('Règle appliquée : Materia ne resserre jamais une bande sans données supplémentaires. La zone interquartile sert à la lecture ; l’enveloppe min–max et les incertitudes non quantifiées restent signalées.').classes('note w-full')
+            ui.label('Règle appliquée : Materia resserre la bande uniquement après un contrôle hors formulation. Jusqu’à 120 jours, ±3,41 % vient des huit erreurs masquées ; au-delà, les vitesses tardives minimale et maximale élargissent progressivement les bornes.').classes('note w-full')
         with ui.column().classes('panel w-full mt-5 gap-3'):
             ui.label('Règle de publication').classes('section-title')
             ui.label('Materia ne passera au niveau « validé » qu’après une évaluation sur une campagne indépendante, compatible en formulation, protocole, géométrie et exposition. Une publication seulement contextuelle reste explicitement exclue des métriques.').classes('note w-full')
@@ -1345,7 +1366,7 @@ def projects():
             with ui.column().classes('panel w-full gap-3 mt-4'):
                 r=row['payload']; manifest=r.get('manifest',{}); d=manifest.get('inputs',{}); model=str(manifest.get('model',''))
                 if model.startswith('datasheet-screening-'):
-                    badge='Projection exploratoire'; badge_class='pill-teal' if manifest.get('evidence_level')=='calibrated_short_term' else 'pill-amber'
+                    badge='Projection exploratoire'; badge_class='pill-teal' if manifest.get('evidence_level') in {'case_calibrated_short_term','calibrated_short_term'} else 'pill-amber'
                     horizon_label=f"{d.get('horizon_years',0):g} ans"
                 else:
                     badge='Exercice synthétique'; badge_class='pill-amber'; horizon_label=f"{d.get('horizon',0):g} jours"
@@ -1990,7 +2011,11 @@ def material_api(material_id: str):
 
 @app.get('/api/validation/pp')
 def pp_validation_api():
-    return pp_temporal_holdout(material_db.evidence_rows('PP','outdoor'))
+    rows=material_db.evidence_rows('PP','outdoor')
+    return {
+        'literature_only':pp_literature_only_benchmark(rows),
+        'measurement_assisted':pp_temporal_holdout(rows),
+    }
 
 if __name__ in {'__main__','__mp_main__'}:
     teacher_token,teacher_created=auth.ensure_server_token('MATERIA_TEACHER_TOKEN','.teacher_token','ENS')

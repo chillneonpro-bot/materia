@@ -81,7 +81,7 @@ def test_datasheet_estimator_uses_environment_and_reports_threshold():
     calibrated=estimate_from_datasheet(material,1500,23,50,2,10,80,'outdoor',evidence)
     assert calibrated['manifest']['assumptions']['evidence_calibrated'] is True
     assert calibrated['crossing_interval'][1] / calibrated['crossing_interval'][0] < 3
-    assert calibrated['manifest']['model']=='datasheet-screening-v4'
+    assert calibrated['manifest']['model']=='datasheet-screening-v5'
     assert calibrated['manifest']['uncertainty']['kind']=='internal_formulation_iqr'
     assert calibrated['manifest']['uncertainty']['predictive_interval_validated'] is False
     assert calibrated['manifest']['source']['doi'] is None or isinstance(calibrated['manifest']['source']['doi'],str)
@@ -142,14 +142,18 @@ def test_pp_evidence_profile_is_tight_in_domain_and_expands_after_observations()
     short=estimate_from_datasheet(material,1000,23,50,2,120/365.25,80,'outdoor',rows)
     long=estimate_from_datasheet(material,1000,23,50,2,5,80,'outdoor',rows)
     assert short['retention'][-1]==pytest.approx(90.01,abs=.05)
-    assert (short['upper'][-1]-short['lower'][-1])/short['modulus'][-1] > .50
-    assert short['manifest']['uncertainty']['kind']=='source_level_predictive_interval'
-    assert short['manifest']['uncertainty']['predictive_interval_validated'] is True
-    assert short['manifest']['assumptions']['independent_sources']==3
-    assert short['manifest']['uncertainty']['calibration']['calibration_units']==3
-    assert (long['upper'][-1]-long['lower'][-1])/long['modulus'][-1] > .50
+    short_width=(short['upper'][-1]-short['lower'][-1])/short['modulus'][-1]
+    long_width=(long['upper'][-1]-long['lower'][-1])/long['modulus'][-1]
+    assert .06 < short_width < .07
+    assert short['manifest']['uncertainty']['kind']=='internal_holdout_interval'
+    assert short['manifest']['uncertainty']['predictive_interval_validated'] is False
+    assert short['manifest']['uncertainty']['internally_calibrated'] is True
+    assert short['manifest']['assumptions']['independent_sources']==1
+    assert short['manifest']['uncertainty']['calibration']['calibration_units']==4
+    assert short['manifest']['uncertainty']['calibration']['test_predictions']==8
+    assert short_width < long_width < .60
     assert all(lo<=mid<=hi for lo,mid,hi in zip(long['lower'],long['modulus'],long['upper']))
-    assert len(long['manifest']['source']['sources'])==3
+    assert long['manifest']['source']['id']=='mdpi-pp-natural-aging-2024'
     assert all(value is not None for value in short['outer_lower'])
     assert short['outer_lower'][-1] <= short['modulus'][-1] <= short['outer_upper'][-1]
     observed_outer=[value for value in long['outer_lower'] if value is not None]
@@ -185,7 +189,7 @@ def test_explanation_labels_extrapolated_threshold_as_working_estimate():
                                    material_db.evidence_rows('PP','outdoor'))
     result['manifest']['inputs']['horizon_display']={'value':120,'unit':'days','label':'120 jours'}
     explanation=result_explanation(result)
-    assert 'franchi après environ 8 mois selon le prolongement central' in explanation
+    assert 'franchi après environ 1 an et 8 mois selon le prolongement central' in explanation
     assert 'estimation de travail à comparer aux essais futurs' in explanation
 
 
@@ -193,12 +197,12 @@ def test_pp_long_horizon_replaces_calibrated_band_with_projection_sensitivity():
     material=material_db.material('PP')
     result=estimate_from_datasheet(material,1100,23,50,2,2,80,'outdoor',
                                    material_db.evidence_rows('PP','outdoor'))
-    assert result['manifest']['uncertainty']['kind']=='extrapolation_sensitivity'
+    assert result['manifest']['uncertainty']['kind']=='observed_rate_envelope_extrapolation'
     assert result['manifest']['uncertainty']['predictive_interval_validated'] is False
     assert result['lower'][-1] < result['modulus'][-1] < result['upper'][-1]
-    assert result['upper'][-1] / result['lower'][-1] < 2
-    assert format_years_months(result['crossing_estimate_years'])=='8 mois'
-    assert [format_years_months(value) for value in result['crossing_interval']]==['5 mois','1 an']
+    assert result['upper'][-1] / result['lower'][-1] < 1.25
+    assert format_years_months(result['crossing_estimate_years'])=='1 an et 8 mois'
+    assert [format_years_months(value) for value in result['crossing_interval']]==['1 an','3 ans et 10 mois']
     assert curve_value_origins(result)[0]=='Interpolé'
     assert curve_value_origin(result)=='Extrapolé'
 

@@ -1,5 +1,11 @@
 # Rapport de validation du prototype — 30 septembre 2026
 
+## Étude PP H301 v0.40
+
+Materia utilise désormais un cas homogène PP H301 pour calibrer la courbe extérieure. Chaque formulation est masquée à tour de rôle ; seul son module initial est conservé et les rétentions à 30 et 120 jours sont estimées avec les trois autres formulations. Sur huit prédictions hors formulation, la MAE est de 13,72 MPa, la MAPE de 2,75 %, l'erreur relative maximale de 3,41 % et la couverture empirique interne de la bande ±3,41 % est de 100 %. Cette calibration interne est limitée au tableau 2 de Matos et al. et à la fenêtre 0–120 jours. Après 120 jours, les bornes prolongent les vitesses tardives minimale et maximale observées ; elles ne possèdent pas de couverture statistique démontrée.
+
+Le rapport complet est disponible dans `docs/ETUDE_VALIDATION_PP_H301_V0.40.md`.
+
 ## Extension v0.39 du référentiel
 
 Le catalogue contient désormais 75 matériaux. Vingt-et-un profils de module initial couvrent 19 matériaux et sont associés à deux supports fabricant officiels, avec le grade, la norme, le conditionnement, le procédé et la température d'essai. Cette validation documentaire concerne uniquement la propriété initiale. Elle ne transforme pas une fiche technique en série de vieillissement et ne relève pas le niveau de preuve de la cinétique.
