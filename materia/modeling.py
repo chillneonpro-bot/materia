@@ -27,6 +27,12 @@ FEATURE_LABELS = {
 
 TIME_UNIT_DAYS = {'days':1.0, 'months':365.25/12, 'years':365.25}
 
+# One comparison convention is applied to every datasheet projection. It
+# varies the ageing speed, not the module itself, so the time-to-threshold
+# interval remains readable and comparable across material families.
+STANDARD_RATE_SLOW_MULTIPLIER = .80
+STANDARD_RATE_FAST_MULTIPLIER = 1.20
+
 def duration_to_days(value: float, unit: str) -> float:
     """Convert a positive UI duration to days using a documented mean calendar year."""
     if unit not in TIME_UNIT_DAYS or not np.isfinite(value) or value < 0:
@@ -484,6 +490,34 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
                      'coverage':'non statistique','interpretation':'La vitesse centrale est modulée de ×0,65 à ×1,50 pour représenter un transfert raisonnable entre la famille documentaire et le grade saisi. Cette zone reste une plage d’estimation, pas un intervalle de confiance.',
                      'predictive_interval_validated':False,'display_band':True,
                      'excludes':['dispersion expérimentale','transfert de formulation','incertitude prédictive']}
+
+    # Uniform comparison layer: every material uses the same ±20 % change in
+    # ageing speed. Source-specific uncertainty is retained for scientific
+    # traceability but no longer changes the main simulator band.
+    source_uncertainty=uncertainty
+    damage=-np.log(np.clip(center/modulus_mpa,1e-12,None))
+    slow_curve=modulus_mpa*np.exp(-STANDARD_RATE_SLOW_MULTIPLIER*damage)
+    fast_curve=modulus_mpa*np.exp(-STANDARD_RATE_FAST_MULTIPLIER*damage)
+    lower=np.minimum(slow_curve,fast_curve)
+    upper=np.maximum(slow_curve,fast_curve)
+    low_cross=(crossing/STANDARD_RATE_FAST_MULTIPLIER if crossing is not None else None)
+    high_cross=(crossing/STANDARD_RATE_SLOW_MULTIPLIER if crossing is not None else None)
+    outer_low_cross=low_cross; outer_high_cross=high_cross
+    low_rate=rate*STANDARD_RATE_SLOW_MULTIPLIER
+    high_rate=rate*STANDARD_RATE_FAST_MULTIPLIER
+    uncertainty={
+        'kind':'standardized_rate_sensitivity',
+        'label':'Plage standardisée ±20 % sur la vitesse',
+        'coverage':'même convention de comparaison pour tous les matériaux',
+        'interpretation':('La borne rapide applique ×1,20 à la vitesse de vieillissement et la borne lente '
+                          '×0,80. Cette plage uniforme facilite la comparaison ; elle ne constitue pas un '
+                          'intervalle de confiance universel.'),
+        'predictive_interval_validated':False,'display_band':True,
+        'rate_multipliers':[STANDARD_RATE_SLOW_MULTIPLIER,STANDARD_RATE_FAST_MULTIPLIER],
+        'calibration':source_uncertainty.get('calibration'),
+        'source_specific':source_uncertainty,
+        'excludes':['garantie statistique universelle','transfert vers un autre grade','variabilité entre lots'],
+    }
     extrapolation_multiple=(horizon_years*365.25/evidence_window_days if evidence_calibrated and evidence_window_days else None)
     evidence_level=('case_calibrated_short_term' if evidence_calibrated and observed_profile.get('profile_kind')=='same_study_formulation_holdout'
                     else 'calibrated_short_term' if evidence_calibrated and observed_profile.get('profile_kind')=='source_ensemble'
@@ -501,7 +535,8 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
     else:
         model_status='ESTIMATION DOCUMENTAIRE DE PRÉSÉLECTION - CONFIANCE LIMITÉE'
     if not evidence_calibrated:
-        profile_warning='Les facteurs température, humidité et épaisseur sont des hypothèses exploratoires.'
+        profile_warning=('Les facteurs température, humidité et épaisseur sont des hypothèses exploratoires ; '
+                         'la plage principale applique la convention commune ×0,80–×1,20 sur la vitesse.')
     elif observed_profile.get('profile_kind')=='temperature_surface':
         profile_warning=('La température saisie n’a pas de courbe exacte : la bande est élargie à la pire erreur '
                          'du test masqué 100 °C (±26,24 %).') if temperature_transfer else (
@@ -548,7 +583,7 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
             'Le module initial ne détermine pas à lui seul la cinétique de vieillissement.',
             'La formulation, les additifs, le procédé et les contraintes mécaniques ne sont pas décrits.',
             (f"Le profil publié couvre {evidence_window_days:g} jours dans les conditions du scénario ; l’horizon demandé représente environ {extrapolation_multiple:.1f} fois cette durée." if evidence_calibrated
-             else 'La vitesse centrale provient de la famille documentaire ; la plage de transfert utilise des multiplicateurs ×0,65 à ×1,50.'),
+             else 'La vitesse centrale provient de la famille documentaire ; la plage visible applique la convention commune ×0,80 à ×1,20.'),
             profile_warning,
             ('En immersion, l’humidité relative de l’air est ignorée ; la nature du liquide, le pH, l’oxygène dissous et le renouvellement du bain ne sont pas modélisés.'
              if exposure=='immersion' else 'Le milieu est représenté par un facteur simplifié.'),
@@ -562,14 +597,6 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
             'crossing_estimate_years':crossing,'crossing_interval':[low_cross,high_cross],
             'fraction_crossing':float(crossing is not None and crossing<=horizon_years),'rate':rate,'manifest':manifest,
             'fingerprint':fingerprint,'pending':False}
-    if evidence_calibrated and not surface:
-        # The full min-max envelope is evidence only inside the shared
-        # observation window. Values beyond it are intentionally blank so the
-        # interface cannot present an extrapolated extreme as an observation.
-        in_window=effective_days<=float(observed_profile['times'][-1])+1e-9
-        result['outer_lower']=[float(value) if inside else None for value,inside in zip(outer_lower,in_window)]
-        result['outer_upper']=[float(value) if inside else None for value,inside in zip(outer_upper,in_window)]
-        result['outer_band_window_days']=evidence_window_days
     return result
 
 def evidence_assessment(result: dict) -> dict:
@@ -620,7 +647,7 @@ def evidence_assessment(result: dict) -> dict:
         'level':'Niveau 1 sur 4',
         'label':'Estimation documentaire de présélection',
         'tone':'amber',
-        'meaning':'La ligne centrale est la meilleure estimation disponible à partir de la famille du matériau, du module initial et des conditions saisies. La plage reflète un transfert de vitesse ×0,65 à ×1,50.',
+        'meaning':'La ligne centrale est la meilleure estimation disponible à partir de la famille du matériau, du module initial et des conditions saisies. La plage standardisée applique la même variation de vitesse ×0,80 à ×1,20 à tous les matériaux.',
         'allowed':'Utiliser la courbe centrale pour une première estimation et comparer des scénarios, en conservant le niveau de confiance limité.',
         'next_step':'Ajouter des séries temporelles traçables pour ce matériau et ces conditions.',
     }

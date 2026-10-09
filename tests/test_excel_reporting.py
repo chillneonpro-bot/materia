@@ -74,8 +74,9 @@ def test_datasheet_and_accepted_observation_exports_keep_their_origin():
                                        material_db.evidence_rows('PP', 'outdoor'))
     archive, _ = workbook_files(result_workbook(informed, 'Projection PP documentée'))
     shared = archive.read('xl/sharedStrings.xml').decode('utf-8')
-    assert 'Minimum observé du corpus (MPa)' in shared
-    assert 'Maximum observé du corpus (MPa)' in shared
+    assert 'Plage standardisée ±20 % sur la vitesse' in shared
+    assert 'Minimum observé du corpus (MPa)' not in shared
+    assert 'Maximum observé du corpus (MPa)' not in shared
 
     rows = material_db.observation_rows('FLAX_EPOXY')
     observed = observed_projection(rows, 20, 90, 2.5, 30, 80)

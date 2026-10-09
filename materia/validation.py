@@ -398,14 +398,20 @@ def uncertainty_budget(result: dict) -> list[dict]:
     center=float(result['modulus'][-1]); lower=float(result['lower'][-1]); upper=float(result['upper'][-1])
     shown=(upper-lower)/(2*center)*100 if center else None
     uncertainty=manifest.get('uncertainty') or {}
-    if uncertainty:
-        rows.append({'component':'Mesure / éprouvettes','value':uncertainty.get('label','Bande publiée'),
-                     'quantified':True,'meaning':uncertainty.get('interpretation') or 'Composante déclarée dans la source.'})
+    source_uncertainty=(uncertainty.get('source_specific') or uncertainty
+                        if uncertainty.get('kind')!='standardized_rate_sensitivity'
+                        else uncertainty.get('source_specific') or {})
+    if source_uncertainty:
+        quantified=source_uncertainty.get('kind') not in {'scenario_sensitivity','internal_formulation_iqr'}
+        rows.append({'component':'Mesure / éprouvettes','value':source_uncertainty.get('label','Incertitude documentaire'),
+                     'quantified':quantified,
+                     'meaning':source_uncertainty.get('interpretation') or 'Composante déclarée dans la source.'})
     else:
         rows.append({'component':'Mesure / éprouvettes','value':'Non quantifiée','quantified':False,
                      'meaning':'Aucune répétition compatible n’est disponible pour ce résultat.'})
-    rows.append({'component':'Bande affichée à l’horizon','value':f'± {shown:.1f} % autour de la courbe centrale' if shown is not None else 'Non calculable',
-                 'quantified':shown is not None,'meaning':'Largeur provenant du calcul actuellement affiché.'})
+    rows.append({'component':'Plage affichée à l’horizon','value':f'± {shown:.1f} % autour de la courbe centrale' if shown is not None else 'Non calculable',
+                 'quantified':shown is not None,
+                 'meaning':'Convention commune ×0,80–×1,20 sur la vitesse ; largeur en module variable avec le temps.'})
     if model.startswith('datasheet-screening-'):
         assumptions=manifest.get('assumptions',{}); multiple=assumptions.get('extrapolation_multiple')
         rows.append({'component':'Extrapolation temporelle','value':f'× {multiple:.1f} la durée observée' if _finite(multiple) else 'Non quantifiée',

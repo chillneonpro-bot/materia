@@ -69,10 +69,12 @@ def test_datasheet_estimator_uses_environment_and_reports_threshold():
     assert outdoor['modulus'][-1] < indoor['modulus'][-1]
     assert indoor['crossing_estimate_years'] > 0
     assert indoor['crossing_interval'][0] < indoor['crossing_estimate_years'] < indoor['crossing_interval'][1]
-    assert indoor['crossing_interval'][1] / indoor['crossing_interval'][0] == pytest.approx(1.5/.65)
+    assert indoor['crossing_interval'][1] / indoor['crossing_interval'][0] == pytest.approx(1.2/.8)
     assert indoor['manifest']['status'].startswith('ESTIMATION DOCUMENTAIRE DE PRÉSÉLECTION')
     assert indoor['manifest']['evidence_level']=='exploratory_family_assumptions'
-    assert indoor['manifest']['uncertainty']['kind']=='scenario_sensitivity'
+    assert indoor['manifest']['uncertainty']['kind']=='standardized_rate_sensitivity'
+    assert indoor['manifest']['uncertainty']['rate_multipliers']==[.8,1.2]
+    assert indoor['manifest']['uncertainty']['source_specific']['kind']=='scenario_sensitivity'
     assert indoor['manifest']['uncertainty']['display_band'] is True
 
     evidence=[]
@@ -82,13 +84,32 @@ def test_datasheet_estimator_uses_environment_and_reports_threshold():
     assert calibrated['manifest']['assumptions']['evidence_calibrated'] is True
     assert calibrated['crossing_interval'][1] / calibrated['crossing_interval'][0] < 3
     assert calibrated['manifest']['model']=='datasheet-screening-v5'
-    assert calibrated['manifest']['uncertainty']['kind']=='internal_formulation_iqr'
+    assert calibrated['manifest']['uncertainty']['kind']=='standardized_rate_sensitivity'
+    assert calibrated['manifest']['uncertainty']['source_specific']['kind']=='internal_formulation_iqr'
     assert calibrated['manifest']['uncertainty']['predictive_interval_validated'] is False
     assert calibrated['manifest']['source']['doi'] is None or isinstance(calibrated['manifest']['source']['doi'],str)
     assert evidence_assessment(calibrated)['level']=='Niveau 1 sur 4'
     short_term=estimate_from_datasheet(material,1500,23,50,2,120/365.25,80,'outdoor',evidence)
     assert evidence_assessment(short_term)['level']=='Niveau 2 sur 4'
     assert len(sampled_curve_rows(calibrated))==9
+
+
+def test_every_datasheet_material_uses_the_same_standardized_interval():
+    scenarios=[
+        estimate_from_datasheet(material_db.material('PET'),3000,23,50,2,5,80,'indoor'),
+        estimate_from_datasheet(material_db.material('PEEK'),4000,40,40,3,5,80,'outdoor'),
+        estimate_from_datasheet(material_db.material('PP'),1500,23,50,2,5,80,'outdoor',
+                                material_db.evidence_rows('PP','outdoor')),
+    ]
+    for result in scenarios:
+        uncertainty=result['manifest']['uncertainty']
+        crossing=result['crossing_estimate_years']
+        assert uncertainty['kind']=='standardized_rate_sensitivity'
+        assert uncertainty['rate_multipliers']==[.8,1.2]
+        assert result['crossing_interval'][0]==pytest.approx(crossing/1.2)
+        assert result['crossing_interval'][1]==pytest.approx(crossing/.8)
+        assert all(lower<=center<=upper for lower,center,upper
+                   in zip(result['lower'],result['modulus'],result['upper']))
 
 
 def test_ambient_humidity_does_not_change_immersion_scenario():
@@ -107,7 +128,8 @@ def test_iir_uses_published_surface_only_inside_temperature_domain():
     outside=estimate_from_datasheet(material,10,23,50,2,1/365.25,70,'immersion',rows,'milform64')
     assert inside['manifest']['assumptions']['evidence_calibrated'] is True
     assert inside['manifest']['assumptions']['evidence_window_days']==pytest.approx(1)
-    assert inside['manifest']['uncertainty']['kind']=='reported_standard_deviation'
+    assert inside['manifest']['uncertainty']['kind']=='standardized_rate_sensitivity'
+    assert inside['manifest']['uncertainty']['source_specific']['kind']=='reported_standard_deviation'
     # Official Table 1 reports 3.00 MPa initially and 3.30 MPa at 24 h at
     # 100 °C: the non-monotone response is preserved rather than forced down.
     assert inside['retention'][-1]==pytest.approx(110.,abs=.1)
@@ -120,10 +142,10 @@ def test_iir_unmeasured_temperature_uses_masked_transfer_error_not_published_sd(
     material=material_db.material('IIR'); rows=material_db.evidence_rows('IIR','immersion')
     interpolated=estimate_from_datasheet(material,10,90,50,2,1/365.25,70,'immersion',rows,'milform64')
     uncertainty=interpolated['manifest']['uncertainty']
-    assert uncertainty['kind']=='temperature_transfer_holdout'
-    assert uncertainty['calibration']['empirical_half_width_pct']==pytest.approx(26.2381252684)
-    assert interpolated['upper'][-1]/interpolated['modulus'][-1]==pytest.approx(1.2623812527)
-    assert interpolated['lower'][-1]/interpolated['modulus'][-1]==pytest.approx(.7376187473)
+    assert uncertainty['kind']=='standardized_rate_sensitivity'
+    assert uncertainty['source_specific']['kind']=='temperature_transfer_holdout'
+    assert uncertainty['source_specific']['calibration']['empirical_half_width_pct']==pytest.approx(26.2381252684)
+    assert uncertainty['rate_multipliers']==[.8,1.2]
     assert any('±26,24 %' in warning for warning in interpolated['manifest']['warnings'])
 
 
@@ -157,22 +179,17 @@ def test_pp_evidence_profile_is_tight_in_domain_and_expands_after_observations()
     assert short['retention'][-1]==pytest.approx(90.01,abs=.05)
     short_width=(short['upper'][-1]-short['lower'][-1])/short['modulus'][-1]
     long_width=(long['upper'][-1]-long['lower'][-1])/long['modulus'][-1]
-    assert .06 < short_width < .07
-    assert short['manifest']['uncertainty']['kind']=='internal_holdout_interval'
+    assert .04 < short_width < .05
+    assert short['manifest']['uncertainty']['kind']=='standardized_rate_sensitivity'
+    assert short['manifest']['uncertainty']['source_specific']['kind']=='internal_holdout_interval'
     assert short['manifest']['uncertainty']['predictive_interval_validated'] is False
-    assert short['manifest']['uncertainty']['internally_calibrated'] is True
     assert short['manifest']['assumptions']['independent_sources']==1
     assert short['manifest']['uncertainty']['calibration']['calibration_units']==4
     assert short['manifest']['uncertainty']['calibration']['test_predictions']==8
     assert short_width < long_width < .60
     assert all(lo<=mid<=hi for lo,mid,hi in zip(long['lower'],long['modulus'],long['upper']))
     assert long['manifest']['source']['id']=='mdpi-pp-natural-aging-2024'
-    assert all(value is not None for value in short['outer_lower'])
-    assert short['outer_lower'][-1] <= short['modulus'][-1] <= short['outer_upper'][-1]
-    observed_outer=[value for value in long['outer_lower'] if value is not None]
-    assert observed_outer
-    assert long['outer_lower'][-1] is None and long['outer_upper'][-1] is None
-    assert long['outer_band_window_days']==pytest.approx(120)
+    assert 'outer_lower' not in short and 'outer_upper' not in long
 
 
 def test_source_ensemble_groups_by_publication_and_rejects_property_mixing():
@@ -210,12 +227,14 @@ def test_pp_long_horizon_replaces_calibrated_band_with_projection_sensitivity():
     material=material_db.material('PP')
     result=estimate_from_datasheet(material,1100,23,50,2,2,80,'outdoor',
                                    material_db.evidence_rows('PP','outdoor'))
-    assert result['manifest']['uncertainty']['kind']=='observed_rate_envelope_extrapolation'
+    assert result['manifest']['uncertainty']['kind']=='standardized_rate_sensitivity'
+    assert result['manifest']['uncertainty']['source_specific']['kind']=='observed_rate_envelope_extrapolation'
     assert result['manifest']['uncertainty']['predictive_interval_validated'] is False
     assert result['lower'][-1] < result['modulus'][-1] < result['upper'][-1]
     assert result['upper'][-1] / result['lower'][-1] < 1.25
     assert format_years_months(result['crossing_estimate_years'])=='1 an et 8 mois'
-    assert [format_years_months(value) for value in result['crossing_interval']]==['1 an','3 ans et 10 mois']
+    assert result['crossing_interval'][0]==pytest.approx(result['crossing_estimate_years']/1.2)
+    assert result['crossing_interval'][1]==pytest.approx(result['crossing_estimate_years']/.8)
     assert curve_value_origins(result)[0]=='Interpolé'
     assert curve_value_origin(result)=='Extrapolé'
 
