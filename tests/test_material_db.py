@@ -36,7 +36,7 @@ def test_seed_is_idempotent(tmp_path, monkeypatch):
         assert conn.execute('SELECT COUNT(*) FROM material_reference_properties').fetchone()[0] == 21
         assert conn.execute("SELECT COUNT(*) FROM material_observations WHERE source_id='scida-2013-flax-epoxy'").fetchone()[0] == 10
         assert conn.execute("SELECT COUNT(*) FROM aging_evidence WHERE source_id='mdpi-pp-natural-aging-2024'").fetchone()[0] == 12
-        assert conn.execute("SELECT COUNT(*) FROM aging_evidence WHERE source_id='mdpi-iir-mwf-2019'").fetchone()[0] == 24
+        assert conn.execute("SELECT COUNT(*) FROM aging_evidence WHERE source_id='mdpi-iir-mwf-2019'").fetchone()[0] == 21
     rows=material_db.evidence_rows('PP','outdoor')
     assert len(rows)==22
     assert all(r['evidence_status']=='source_verified_table' for r in rows)
@@ -110,8 +110,13 @@ def test_unverified_evidence_never_reaches_model_rows(tmp_path, monkeypatch):
     assert iir[0]['source_doi']=='10.3390/jcs3020048'
     assert iir[0]['status']=='source_verified_domain_limited'
     iir_rows=material_db.evidence_rows('IIR','immersion')
-    assert len(iir_rows)==24
+    assert len(iir_rows)==21
     assert {r['ageing_temperature_c'] for r in iir_rows}=={80.,100.,120.}
+    assert all(r['source_location'].startswith('Tableau 1') for r in iir_rows)
+    assert not any(abs(r['time_days']-3/24)<1e-12 for r in iir_rows)
+    value_120c_2h=next(r for r in iir_rows
+                       if r['ageing_temperature_c']==120 and abs(r['time_days']-2/24)<1e-12)
+    assert value_120c_2h['modulus_mpa']==pytest.approx(7.43)
 
 
 def test_corpus_audit_explains_scientific_gates(tmp_path, monkeypatch):

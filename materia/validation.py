@@ -37,6 +37,21 @@ def _error_metrics(details: list[dict]) -> dict:
     }
 
 
+def _finite_sample_band(details: list[dict], target_coverage: float = .8) -> dict:
+    """Return an auditable split-conformal absolute relative-error band."""
+    residuals=np.sort(np.asarray([row['relative_error_pct'] for row in details],dtype=float))
+    if not len(residuals):
+        raise ValueError('Aucune prédiction masquée disponible pour calculer la bande.')
+    rank=min(len(residuals),int(math.ceil((len(residuals)+1)*target_coverage)))
+    half_width=float(residuals[rank-1])
+    return {
+        'target_coverage_pct':target_coverage*100,
+        'empirical_coverage_pct':float(np.mean(residuals<=half_width+1e-12)*100),
+        'empirical_half_width_pct':half_width,
+        'conformal_rank':rank,
+    }
+
+
 def _pp_anchor_values(group: list[dict]) -> tuple[float,float,float] | None:
     """Return the exact 0/30/120-day anchors, independently of row order or extra times."""
     by_time={float(row['time_days']):float(row['modulus_mpa']) for row in group
@@ -139,12 +154,8 @@ def pp_literature_only_benchmark(rows: list[dict]) -> dict:
                 'test_sd_mpa':float(group[index].get('standard_deviation_mpa') or 0),
             })
     metrics=_error_metrics(details)
-    relative_residuals=np.asarray([row['relative_error_pct'] for row in details],dtype=float)
-    # With only eight held-out points, the finite-sample 80% conformal rank is
-    # the maximum residual. Keeping the unrounded value preserves exact auditability.
-    alpha=.2; rank=min(len(relative_residuals),int(math.ceil((len(relative_residuals)+1)*(1-alpha))))
-    half_width_pct=float(np.sort(relative_residuals)[rank-1])
-    coverage=float(np.mean(relative_residuals<=half_width_pct+1e-12)*100)
+    band=_finite_sample_band(details)
+    half_width_pct=band['empirical_half_width_pct']
     by_day={}
     for day in (30.,120.):
         subset=[row for row in details if row['time_days']==day]
@@ -161,8 +172,7 @@ def pp_literature_only_benchmark(rows: list[dict]) -> dict:
                     'puis prédit E30 et E120 avec les rétentions médianes des trois autres formulations.'),
         'independence':'Validation interne hors formulation, une publication et quatre formulations PP H301',
         **metrics,'details':details,'test_count':len(details),'by_day':by_day,
-        'target_coverage_pct':80.,'empirical_coverage_pct':coverage,
-        'empirical_half_width_pct':half_width_pct,
+        **band,
         'profile':{
             'times_days':[0.,30.,120.],
             'median_retention':np.median(anchors,axis=0).tolist(),
@@ -176,6 +186,122 @@ def pp_literature_only_benchmark(rows: list[dict]) -> dict:
         'conclusion':('Dans ce cas PP H301, une courbe fondée sur la littérature seule atteint une erreur relative '
                       'moyenne inférieure à 3 % à 30 et 120 jours. La bande empirique est valable comme contrôle '
                       'interne du cas étudié ; son transfert à un autre grade ou au-delà de 120 jours reste à confirmer.'),
+    }
+
+
+def iir_temporal_holdout(rows: list[dict]) -> dict:
+    """Check piecewise-linear interpolation by masking every interior IIR point."""
+    direct=[row for row in rows if row.get('source_id')=='mdpi-iir-mwf-2019']
+    groups={float(temperature):sorted(
+        (row for row in direct if float(row.get('ageing_temperature_c'))==float(temperature)),
+        key=lambda row:float(row['time_days']))
+        for temperature in sorted({float(row['ageing_temperature_c']) for row in direct
+                                   if _finite(row.get('ageing_temperature_c'))})}
+    if len(groups)!=3 or any(len(group)<7 for group in groups.values()):
+        raise ValueError('Les trois courbes IIR complètes à 80, 100 et 120 °C sont requises.')
+    details=[]
+    for temperature,group in groups.items():
+        for index in range(1,len(group)-1):
+            target=group[index]; before=group[index-1]; after=group[index+1]
+            time=float(target['time_days'])
+            fraction=(time-float(before['time_days']))/(float(after['time_days'])-float(before['time_days']))
+            predicted=float(before['modulus_mpa'])+fraction*(float(after['modulus_mpa'])-float(before['modulus_mpa']))
+            observed=float(target['modulus_mpa']); error=predicted-observed
+            sd=float(target.get('standard_deviation_mpa') or 0)
+            details.append({
+                'temperature_c':temperature,'time_hours':time*24,
+                'observed_mpa':observed,'predicted_mpa':predicted,
+                'error_mpa':error,'absolute_error_mpa':abs(error),
+                'relative_error_pct':abs(error)/observed*100,
+                'test_sd_mpa':sd,'within_reported_sd':bool(sd and abs(error)<=sd),
+            })
+    return {
+        'material':'Composite caoutchouc butyle (IIR/BRC)',
+        'method':'Interpolation linéaire avec un temps intérieur masqué',
+        'protocol':('Chaque valeur intérieure est retirée puis reconstruite uniquement avec les deux temps '
+                    'publiés qui l’encadrent, à température constante.'),
+        'independence':'Validation interne sur trois courbes d’une publication, 80/100/120 °C et 0–24 h',
+        **_error_metrics(details),**_finite_sample_band(details),
+        'within_reported_sd_count':sum(row['within_reported_sd'] for row in details),
+        'test_count':len(details),'details':details,
+        'status':'INTERPOLATION TEMPORELLE INTERNE',
+        'conclusion':('L’interpolation entre temps mesurés est exploitable dans la fenêtre 0–24 h, mais les '
+                      'variations non monotones à 120 °C imposent une bande plus large que pour le PP.'),
+    }
+
+
+def iir_temperature_holdout(rows: list[dict]) -> dict:
+    """Hide the 100 °C curve and reconstruct it from normalized 80/120 °C curves."""
+    direct=[row for row in rows if row.get('source_id')=='mdpi-iir-mwf-2019']
+    by_temperature={}
+    for temperature in (80.,100.,120.):
+        group=sorted((row for row in direct if float(row.get('ageing_temperature_c') or -999)==temperature),
+                     key=lambda row:float(row['time_days']))
+        by_temperature[temperature]={round(float(row['time_days'])*24,9):row for row in group}
+    shared=set(by_temperature[80.]) & set(by_temperature[100.]) & set(by_temperature[120.])
+    if len(shared)<7:
+        raise ValueError('Les temps communs des courbes IIR 80/100/120 °C sont incomplets.')
+    initial={temperature:float(by_temperature[temperature][0.]['modulus_mpa']) for temperature in by_temperature}
+    details=[]
+    for hours in sorted(shared-{0.}):
+        observed=float(by_temperature[100.][hours]['modulus_mpa'])
+        retention80=float(by_temperature[80.][hours]['modulus_mpa'])/initial[80.]
+        retention120=float(by_temperature[120.][hours]['modulus_mpa'])/initial[120.]
+        predicted=initial[100.]*(retention80+retention120)/2
+        error=predicted-observed
+        details.append({
+            'temperature_c':100.,'time_hours':hours,
+            'observed_mpa':observed,'predicted_mpa':predicted,
+            'error_mpa':error,'absolute_error_mpa':abs(error),
+            'relative_error_pct':abs(error)/observed*100,
+        })
+    return {
+        'method':'Courbe 100 °C entièrement masquée, interpolation normalisée entre 80 et 120 °C',
+        'protocol':'Seul E0 à 100 °C est conservé ; toutes les valeurs vieillies à 100 °C sont masquées.',
+        **_error_metrics(details),**_finite_sample_band(details),
+        'test_count':len(details),'details':details,
+        'status':'TRANSFERT EN TEMPÉRATURE NON VALIDÉ',
+        'conclusion':('La réponse IIR n’est pas linéaire avec la température. Materia doit privilégier les '
+                      'courbes exactes à 80, 100 ou 120 °C et ne pas annoncer la même précision entre ces niveaux.'),
+    }
+
+
+def flax_temperature_transfer_benchmark(rows: list[dict]) -> dict:
+    """Predict each flax/epoxy temperature campaign from the other campaign."""
+    usable=[row for row in rows if _finite(row.get('temperature_C')) and _finite(row.get('modulus_MPa'))]
+    temperatures=sorted({float(row['temperature_C']) for row in usable})
+    if temperatures!=[20.,40.]:
+        raise ValueError('Les campagnes lin/époxy complètes à 20 et 40 °C sont requises.')
+    groups={temperature:{float(row['time_days']):row for row in usable
+                         if float(row['temperature_C'])==temperature} for temperature in temperatures}
+    shared=set(groups[20.]) & set(groups[40.])
+    if len(shared)<5 or 0. not in shared:
+        raise ValueError('Les cinq temps communs lin/époxy sont requis.')
+    details=[]
+    for target_temperature,peer_temperature in ((20.,40.),(40.,20.)):
+        target_e0=float(groups[target_temperature][0.]['modulus_MPa'])
+        peer_e0=float(groups[peer_temperature][0.]['modulus_MPa'])
+        for day in sorted(shared-{0.}):
+            observed=float(groups[target_temperature][day]['modulus_MPa'])
+            predicted=target_e0*float(groups[peer_temperature][day]['modulus_MPa'])/peer_e0
+            error=predicted-observed
+            details.append({
+                'temperature_c':target_temperature,'time_days':day,
+                'observed_mpa':observed,'predicted_mpa':predicted,
+                'error_mpa':error,'absolute_error_mpa':abs(error),
+                'relative_error_pct':abs(error)/observed*100,
+            })
+    return {
+        'material':'Composite fibres de lin / époxy',
+        'method':'Transfert de la rétention entre les campagnes 20 et 40 °C',
+        'protocol':('Chaque campagne est masquée à tour de rôle. Materia conserve son E0 et applique uniquement '
+                    'la rétention de l’autre température aux jours 1, 3, 9 et 38.'),
+        'independence':'Validation interne entre deux campagnes de la même publication ; valeurs de figure numérisées à ±3 %',
+        **_error_metrics(details),**_finite_sample_band(details),
+        'test_count':len(details),'details':details,
+        'status':'TRANSFERT INTERNE PILOTE',
+        'conclusion':('La forme de courbe se transfère correctement entre 20 et 40 °C sur 0–38 jours. La bande '
+                      'reste interne à deux campagnes et l’incertitude de numérisation doit rester affichée séparément.'),
     }
 
 

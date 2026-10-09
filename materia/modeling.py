@@ -171,19 +171,37 @@ def _temperature_surface_profile(rows: list[dict], temperature_c: float) -> dict
         profiles.append([float(by_time[t]['modulus_mpa'])/e0 for t in common])
         deviations.append([float(by_time[t].get('standard_deviation_mpa') or 0)/e0 for t in common])
     profiles=np.asarray(profiles); deviations=np.asarray(deviations); times=np.asarray(common)
+    exact_temperature=any(np.isclose(temperature_c,value,rtol=0,atol=1e-9) for value in temperatures)
     center=np.asarray([np.interp(temperature_c,temperatures,profiles[:,i]) for i in range(len(times))])
     sd=np.asarray([np.interp(temperature_c,temperatures,deviations[:,i]) for i in range(len(times))])
+    transfer_calibration=None
+    if not exact_temperature and {str(r.get('source_id')) for r in eligible}=={'mdpi-iir-mwf-2019'}:
+        # The entire 100 °C curve was hidden and reconstructed from 80/120 °C.
+        # Its worst observed relative error is the only defensible band for an
+        # unmeasured intermediate temperature in this small corpus.
+        from materia.validation import iir_temperature_holdout
+        transfer_calibration=iir_temperature_holdout(eligible)
+        half=transfer_calibration['empirical_half_width_pct']/100
+        lower=np.maximum(center*(1-half),0); upper=center*(1+half)
+    else:
+        lower=np.maximum(center-sd,0); upper=center+sd
     tail_rate=float(np.log(center[-2]/center[-1])/(times[-1]-times[-2])) if center[-2]>center[-1]>0 else 0.
     first=groups[0][0]; source_ids=sorted({str(r.get('source_id') or 'source-non-renseignée') for r in eligible})
-    return {'times':times,'median':center,'lower':np.maximum(center-sd,0),'upper':center+sd,
-            'outer_lower':np.maximum(center-sd,0),'outer_upper':center+sd,
+    return {'times':times,'median':center,'lower':lower,'upper':upper,
+            'outer_lower':lower,'outer_upper':upper,
             'late_rate':tail_rate,'late_rate_low':tail_rate,'late_rate_high':tail_rate,
             'outer_rate_low':tail_rate,'outer_rate_high':tail_rate,
             'experiments':len(groups),'source_count':len(source_ids),'source_ids':source_ids,
             'profile_kind':'temperature_surface','temperature_range':[temperatures[0],temperatures[-1]],
+            'exact_temperature':exact_temperature,
+            'calibration':({'method':transfer_calibration['method'],
+                            'mape_pct':transfer_calibration['mape_pct'],
+                            'empirical_half_width_pct':transfer_calibration['empirical_half_width_pct'],
+                            'test_predictions':transfer_calibration['test_count']}
+                           if transfer_calibration else None),
             'source':{'id':first.get('source_id'),'title':first.get('source_title'),
                       'url':first.get('source_url'),'doi':first.get('source_doi'),
-                      'location':f'Tableau 2, interpolation {temperature_c:g} °C entre courbes publiées'}}
+                      'location':f'Tableau 1, {"courbe exacte" if exact_temperature else "interpolation"} à {temperature_c:g} °C'}}
 
 
 def _literature_ensemble_profile(rows: list[dict]) -> dict | None:
@@ -387,12 +405,13 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
         source=observed_profile['source']
         predictive_interval_validated=observed_profile['source_count']>=3
         surface=observed_profile.get('profile_kind')=='temperature_surface'
+        temperature_transfer=surface and not observed_profile.get('exact_temperature',False)
         ensemble=observed_profile.get('profile_kind')=='source_ensemble'
         case_profile=observed_profile.get('profile_kind')=='same_study_formulation_holdout'
-        uncertainty={'kind':'reported_standard_deviation' if surface else 'source_level_predictive_interval' if ensemble else 'internal_holdout_interval' if case_profile else 'internal_formulation_iqr',
-                     'label':'Dispersion publiée ±1 écart-type' if surface else 'Intervalle prédictif pilote P10–P90' if ensemble else 'Bande empirique 80 % du cas PP H301' if case_profile else f"Dispersion centrale des {observed_profile['experiments']} formulations",
-                     'coverage':'dispersion des mesures publiées' if surface else f"{observed_profile['calibration']['empirical_point_coverage_pct']:.1f} % observés en validation hors source" if ensemble else f"{observed_profile['calibration']['empirical_point_coverage_pct']:.1f} % sur 8 prédictions hors formulation" if case_profile else '50 % central du corpus aux temps observés',
-                     'interpretation':'Écart-type rapporté dans le tableau source ; il ne couvre pas le transfert vers un autre liquide ou une autre formulation.' if surface else 'Quantiles asymétriques des erreurs logarithmiques obtenues en laissant chaque publication entière de côté. Le corpus minimal de trois sources rend encore la couverture incertaine.' if ensemble else 'Largeur issue de l’erreur relative maximale observée lorsque chaque formulation PP H301 est masquée à tour de rôle. Elle est calibrée en interne à 0–120 jours.' if case_profile else 'Zone centrale entre les quartiles 25 % et 75 %. L’enveloppe min-max complète reste indiquée dans les hypothèses.',
+        uncertainty={'kind':'temperature_transfer_holdout' if temperature_transfer else 'reported_standard_deviation' if surface else 'source_level_predictive_interval' if ensemble else 'internal_holdout_interval' if case_profile else 'internal_formulation_iqr',
+                     'label':f"Bande de transfert en température ±{observed_profile['calibration']['empirical_half_width_pct']:.1f} %" if temperature_transfer else 'Dispersion publiée ±1 écart-type' if surface else 'Intervalle prédictif pilote P10–P90' if ensemble else 'Bande empirique 80 % du cas PP H301' if case_profile else f"Dispersion centrale des {observed_profile['experiments']} formulations",
+                     'coverage':f"pire erreur sur {observed_profile['calibration']['test_predictions']} valeurs de la courbe 100 °C masquée" if temperature_transfer else 'dispersion des mesures publiées' if surface else f"{observed_profile['calibration']['empirical_point_coverage_pct']:.1f} % observés en validation hors source" if ensemble else f"{observed_profile['calibration']['empirical_point_coverage_pct']:.1f} % sur 8 prédictions hors formulation" if case_profile else '50 % central du corpus aux temps observés',
+                     'interpretation':'La température demandée n’a pas de courbe publiée exacte. La bande reprend la pire erreur lorsque la courbe 100 °C est reconstruite depuis 80 et 120 °C.' if temperature_transfer else 'Écart-type rapporté dans le tableau source ; il ne couvre pas le transfert vers un autre liquide ou une autre formulation.' if surface else 'Quantiles asymétriques des erreurs logarithmiques obtenues en laissant chaque publication entière de côté. Le corpus minimal de trois sources rend encore la couverture incertaine.' if ensemble else 'Largeur issue de l’erreur relative maximale observée lorsque chaque formulation PP H301 est masquée à tour de rôle. Elle est calibrée en interne à 0–120 jours.' if case_profile else 'Zone centrale entre les quartiles 25 % et 75 %. L’enveloppe min-max complète reste indiquée dans les hypothèses.',
                      'predictive_interval_validated':predictive_interval_validated and not case_profile,
                      'internally_calibrated':case_profile,
                      'display_band':True,
@@ -481,6 +500,22 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
         model_status='HORS DOMAINE DE PREUVE - SCÉNARIO PÉDAGOGIQUE UNIQUEMENT'
     else:
         model_status='ESTIMATION DOCUMENTAIRE DE PRÉSÉLECTION - CONFIANCE LIMITÉE'
+    if not evidence_calibrated:
+        profile_warning='Les facteurs température, humidité et épaisseur sont des hypothèses exploratoires.'
+    elif observed_profile.get('profile_kind')=='temperature_surface':
+        profile_warning=('La température saisie n’a pas de courbe exacte : la bande est élargie à la pire erreur '
+                         'du test masqué 100 °C (±26,24 %).') if temperature_transfer else (
+                         'La courbe correspond à une température publiée exacte ; aucun transfert sous 80 °C '
+                         'ou au-dessus de 120 °C.')
+    elif observed_profile.get('profile_kind')=='source_ensemble':
+        profile_warning=('Les climats naturels des publications sont conservés tels quels ; la température, '
+                         'l’humidité et l’épaisseur saisies ne corrigent pas encore cet ensemble.')
+    elif observed_profile.get('profile_kind')=='same_study_formulation_holdout':
+        profile_warning=('Le cas PP H301 est calibré sur quatre formulations d’une même publication ; au-delà de '
+                         '120 jours, la bande prolonge les vitesses tardives extrêmes observées.')
+    else:
+        profile_warning=('Le facteur de température Q10 est une analyse de sensibilité non ajustée sur cette '
+                         'publication ; humidité et épaisseur ne sont pas calibrées.')
     manifest={'model':'datasheet-screening-v5','dataset':'verified-literature-plus-material-card',
         'material_id':material['id'],'material_name':material['name'],
         'target_property':material.get('target_property') or 'Module de Young',
@@ -514,8 +549,7 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
             'La formulation, les additifs, le procédé et les contraintes mécaniques ne sont pas décrits.',
             (f"Le profil publié couvre {evidence_window_days:g} jours dans les conditions du scénario ; l’horizon demandé représente environ {extrapolation_multiple:.1f} fois cette durée." if evidence_calibrated
              else 'La vitesse centrale provient de la famille documentaire ; la plage de transfert utilise des multiplicateurs ×0,65 à ×1,50.'),
-            (('La température est interpolée uniquement entre les courbes publiées ; aucun transfert sous 80 °C ou au-dessus de 120 °C.' if observed_profile.get('profile_kind')=='temperature_surface' else 'Les climats naturels des publications sont conservés tels quels ; la température, l’humidité et l’épaisseur saisies ne corrigent pas encore cet ensemble.' if observed_profile.get('profile_kind')=='source_ensemble' else 'Le cas PP H301 est calibré sur quatre formulations d’une même publication ; au-delà de 120 jours, la bande prolonge les vitesses tardives extrêmes observées.' if observed_profile.get('profile_kind')=='same_study_formulation_holdout' else 'Le facteur de température Q10 est une analyse de sensibilité non ajustée sur cette publication ; humidité et épaisseur ne sont pas calibrées.') if evidence_calibrated
-             else 'Les facteurs température, humidité et épaisseur sont des hypothèses exploratoires.'),
+            profile_warning,
             ('En immersion, l’humidité relative de l’air est ignorée ; la nature du liquide, le pH, l’oxygène dissous et le renouvellement du bain ne sont pas modélisés.'
              if exposure=='immersion' else 'Le milieu est représenté par un facteur simplifié.'),
         ],

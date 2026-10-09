@@ -457,15 +457,15 @@ MDPI_PP_OBSERVATIONS = [
     ('MDPI-RPP3X-5CHF', [(0,541.1,8.4),(30,492.4,30.9),(120,481.6,40.1)]),
 ]
 
-# Table 2, experimental Young modulus E_exp in MPa (mean, standard deviation).
-# The second OCR-visible "2 h" row is the 3 h row in the ordered source table.
+# Table 1, experimental Young modulus E_exp in MPa (mean, standard deviation).
+# Direct transcription checked against the HTML table of the primary article.
 MDPI_IIR_MWF_OBSERVATIONS = [
-    (80., [(0,3.40,.04),(1,2.89,.20),(2,2.64,.16),(3,2.43,.08),
-           (4,2.41,.05),(6,2.30,.03),(14,2.31,.05),(24,1.98,.02)]),
-    (100.,[(0,3.00,.05),(1,3.15,.25),(2,2.51,.09),(3,2.52,.01),
-           (4,2.33,.11),(6,2.18,.03),(14,2.01,.05),(24,1.92,.06)]),
-    (120.,[(0,4.11,.16),(1,6.10,1.10),(2,6.28,.17),(3,6.46,.01),
-           (4,3.26,.18),(6,3.41,.03),(14,3.15,.04),(24,3.06,.05)]),
+    (80., [(0,3.40,.04),(1,2.89,.20),(2,3.01,.09),(4,2.99,.03),
+           (6,2.98,.10),(14,2.98,.09),(24,2.96,.02)]),
+    (100.,[(0,3.00,.05),(1,3.15,.25),(2,3.20,.13),(4,2.88,.18),
+           (6,3.01,.02),(14,3.27,.01),(24,3.30,.09)]),
+    (120.,[(0,4.11,.16),(1,6.10,1.10),(2,7.43,.18),(4,5.45,.85),
+           (6,4.57,.02),(14,5.08,.14),(24,4.80,.12)]),
 ]
 
 PP_OUTDOOR_DIGITIZED_OBSERVATIONS = [
@@ -795,20 +795,36 @@ def migrate() -> None:
                             'mdpi-pp-natural-aging-2024',?,'source_verified_table')""",
                     (experiment_id,days,modulus,sd,formulation+'; ASTM D638; 50 mm/min; room temperature; n=7',
                      f'Tableau 2, {experiment_id}, t={days} jours'))
+        # Remove the obsolete OCR-only 3 h points which were present before
+        # the direct Table 1 verification, then keep every official value in
+        # sync on existing installations as well as fresh databases.
+        conn.execute("""DELETE FROM aging_evidence
+            WHERE source_id='mdpi-iir-mwf-2019' AND ABS(time_days-0.125)<1e-12""")
         for ageing_temperature, values in MDPI_IIR_MWF_OBSERVATIONS:
             experiment_id=f'IIR-MWF-{int(ageing_temperature)}C'
             for hours,modulus,sd in values:
-                conn.execute("""INSERT OR IGNORE INTO aging_evidence
+                conn.execute("""INSERT INTO aging_evidence
                     (material_id,experiment_id,time_days,modulus_mpa,standard_deviation_mpa,
                      sample_count,exposure_mode,protocol,source_id,source_location,evidence_status,
                      ageing_temperature_c,medium,property_name,extraction_method,formulation)
                     VALUES ('IIR',?,?,?,?,NULL,'immersion',?,
                             'mdpi-iir-mwf-2019',?,'source_verified_table',?,
                             'Milform 64 SST','Module de Young en traction','direct_table_transcription',
-                            'Composite de caoutchouc butyle chargé de noir de carbone')""",
+                            'Composite de caoutchouc butyle chargé de noir de carbone')
+                    ON CONFLICT(source_id,experiment_id,time_days) DO UPDATE SET
+                        modulus_mpa=excluded.modulus_mpa,
+                        standard_deviation_mpa=excluded.standard_deviation_mpa,
+                        protocol=excluded.protocol,
+                        source_location=excluded.source_location,
+                        evidence_status=excluded.evidence_status,
+                        ageing_temperature_c=excluded.ageing_temperature_c,
+                        medium=excluded.medium,
+                        property_name=excluded.property_name,
+                        extraction_method=excluded.extraction_method,
+                        formulation=excluded.formulation""",
                     (experiment_id,hours/24,modulus,sd,
                      'Immersion Milform 64 SST; traction; haute température; formulation BRC de l’article',
-                     f'Tableau 2, E exp, {ageing_temperature:g} °C, t={hours:g} h',ageing_temperature))
+                     f'Tableau 1, E exp, {ageing_temperature:g} °C, t={hours:g} h',ageing_temperature))
         for experiment in PP_OUTDOOR_DIGITIZED_OBSERVATIONS:
             for days,modulus in experiment['values']:
                 figure='Figure 4' if experiment['source_id']=='mdpi-pp-zno-sunlight-2020' else 'Figure 8'

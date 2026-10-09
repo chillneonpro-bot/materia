@@ -22,7 +22,8 @@ from materia.charts import curve, comparison, base
 from materia.reporting import markdown_report
 from materia.pdf_reporting import evidence_card_pdf, result_pdf
 from materia.validation import (pp_literature_only_benchmark, pp_temporal_holdout,
-    pp_short_term_prediction, validity_diagnostic)
+    pp_short_term_prediction, validity_diagnostic, iir_temporal_holdout,
+    iir_temperature_holdout, flax_temperature_transfer_benchmark)
 from materia.blind_prediction import compare_with_experiment, freeze_prediction, parse_validation_file
 from materia.readiness import comparison_assessment, preparation_assessment
 from materia.planning import experiment_plan, experiment_plan_workbook
@@ -1137,6 +1138,11 @@ def validity_page():
     rows=material_db.evidence_rows('PP','outdoor')
     literature_report=pp_literature_only_benchmark(rows)
     report=pp_temporal_holdout(rows)
+    iir_rows=material_db.evidence_rows('IIR','immersion')
+    iir_temporal=iir_temporal_holdout(iir_rows)
+    iir_temperature=iir_temperature_holdout(iir_rows)
+    flax_report=flax_temperature_transfer_benchmark(
+        material_db.observation_rows('FLAX_EPOXY',include_pending=True))
     with shell('/validite','Validité scientifique'):
         intro('Contrôle scientifique','Ce que Materia sait vraiment prédire',
               'Cette page compare les prédictions de Materia aux modules réellement publiés et sépare clairement la fenêtre vérifiée de l’extrapolation.')
@@ -1166,6 +1172,56 @@ def validity_page():
             } for row in literature_report['details']]
             table_rows(display_details,['formulation','time_days','observed_mpa','predicted_mpa','absolute_error_mpa','relative_error_pct','covered'])
             ui.label(literature_report['conclusion']).classes('note w-full')
+        with ui.column().classes('panel w-full mt-5 gap-4'):
+            with ui.row().classes('w-full justify-between items-center gap-3'):
+                ui.label('Essai masqué n°2 : composite caoutchouc butyle IIR').classes('section-title')
+                pill(iir_temporal['status'],'pill-teal')
+            ui.label(iir_temporal['protocol']).classes('body-copy')
+            with ui.element('div').classes('result-grid w-full'):
+                for label,value,detail in [
+                    ('Valeurs publiées','21','Tableau 1 vérifié · 80, 100 et 120 °C'),
+                    ('Erreur moyenne',f"{number_fr(iir_temporal['mape_pct'],2)} %",f"MAE {number_fr(iir_temporal['mae_mpa'],2)} MPa"),
+                    ('Bande interne 80 %',f"± {number_fr(iir_temporal['empirical_half_width_pct'],1)} %",f"Pire écart {number_fr(iir_temporal['max_relative_error_pct'],1)} %"),
+                ]:
+                    with ui.column().classes('result-stat gap-1'):
+                        ui.label(label).classes('stat-label'); ui.label(value).classes('result-value'); ui.label(detail).classes('small')
+            iir_details=[{
+                'temperature_c':int(row['temperature_c']),'time_hours':round(row['time_hours'],1),
+                'observed_mpa':round(row['observed_mpa'],2),'predicted_mpa':round(row['predicted_mpa'],2),
+                'relative_error_pct':round(row['relative_error_pct'],2),
+            } for row in iir_temporal['details']]
+            with ui.expansion('Voir les 15 valeurs masquées',icon='table_view').classes('w-full'):
+                table_rows(iir_details,['temperature_c','time_hours','observed_mpa','predicted_mpa','relative_error_pct'])
+            ui.label(iir_temporal['conclusion']).classes('note w-full')
+            ui.separator()
+            with ui.row().classes('w-full justify-between items-center gap-3'):
+                ui.label('Contrôle plus difficile : masquer toute la courbe à 100 °C').classes('font-medium')
+                pill(iir_temperature['status'],'pill-amber')
+            ui.label(f"L’interpolation depuis 80 et 120 °C donne {number_fr(iir_temperature['mape_pct'],2)} % d’erreur moyenne, jusqu’à {number_fr(iir_temperature['max_relative_error_pct'],2)} %. Le R² est {number_fr(iir_temperature['r2'],2)} : cette loi en température est donc rejetée.").classes('body-copy')
+            ui.label('Décision logicielle : utiliser les courbes publiées exactes à 80, 100 ou 120 °C. Pour une température intermédiaire, afficher une alerte et ne pas promettre la bande ±10,9 %.').classes('pill pill-amber')
+            ui.link('Source primaire IIR · DOI 10.3390/jcs3020048','https://www.mdpi.com/2504-477X/3/2/48',new_tab=True).classes('text-sm')
+        with ui.column().classes('panel w-full mt-5 gap-4'):
+            with ui.row().classes('w-full justify-between items-center gap-3'):
+                ui.label('Essai masqué n°3 : composite lin / époxy').classes('section-title')
+                pill(flax_report['status'],'pill-teal')
+            ui.label(flax_report['protocol']).classes('body-copy')
+            with ui.element('div').classes('result-grid w-full'):
+                for label,value,detail in [
+                    ('Prédictions masquées',str(flax_report['test_count']),'Jours 1, 3, 9 et 38 · 20/40 °C'),
+                    ('Erreur moyenne',f"{number_fr(flax_report['mape_pct'],2)} %",f"MAE {number_fr(flax_report['mae_mpa'],0)} MPa · R² {number_fr(flax_report['r2'],3)}"),
+                    ('Bande empirique interne',f"± {number_fr(flax_report['empirical_half_width_pct'],1)} %",f"{number_fr(flax_report['empirical_coverage_pct'],0)} % des 8 valeurs couvertes"),
+                ]:
+                    with ui.column().classes('result-stat gap-1'):
+                        ui.label(label).classes('stat-label'); ui.label(value).classes('result-value'); ui.label(detail).classes('small')
+            flax_details=[{
+                'temperature_c':int(row['temperature_c']),'time_days':int(row['time_days']),
+                'observed_mpa':round(row['observed_mpa']), 'predicted_mpa':round(row['predicted_mpa']),
+                'relative_error_pct':round(row['relative_error_pct'],2),
+            } for row in flax_report['details']]
+            table_rows(flax_details,['temperature_c','time_days','observed_mpa','predicted_mpa','relative_error_pct'])
+            ui.label(flax_report['conclusion']).classes('note w-full')
+            ui.label('Décision logicielle : ±11,4 % est une bande pilote raisonnable dans la fenêtre 0–38 jours pour ce composite exact. La numérisation de la figure (±3 %) et la variabilité entre lots restent des composantes distinctes.').classes('pill pill-teal')
+            ui.link('Source primaire lin/époxy · DOI 10.1016/j.compositesb.2012.12.010','https://doi.org/10.1016/j.compositesb.2012.12.010',new_tab=True).classes('text-sm')
         with ui.column().classes('panel w-full mt-5 gap-4'):
             ui.label('Contrôle complémentaire avec une mesure à 30 jours').classes('section-title')
             ui.label(report['method']+' · '+report['split']).classes('body-copy')
@@ -2016,6 +2072,19 @@ def pp_validation_api():
         'literature_only':pp_literature_only_benchmark(rows),
         'measurement_assisted':pp_temporal_holdout(rows),
     }
+
+@app.get('/api/validation/iir')
+def iir_validation_api():
+    rows=material_db.evidence_rows('IIR','immersion')
+    return {
+        'temporal_interpolation':iir_temporal_holdout(rows),
+        'temperature_transfer':iir_temperature_holdout(rows),
+    }
+
+@app.get('/api/validation/flax-epoxy')
+def flax_validation_api():
+    rows=material_db.observation_rows('FLAX_EPOXY',include_pending=True)
+    return {'temperature_transfer':flax_temperature_transfer_benchmark(rows)}
 
 if __name__ in {'__main__','__mp_main__'}:
     teacher_token,teacher_created=auth.ensure_server_token('MATERIA_TEACHER_TOKEN','.teacher_token','ENS')
