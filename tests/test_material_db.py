@@ -7,8 +7,9 @@ from materia import material_db, store
 def test_seeded_catalog_and_sources(tmp_path, monkeypatch):
     monkeypatch.setattr(store, 'DB', tmp_path / 'materials.sqlite3')
     items = material_db.catalog()
-    assert {'PE','LDPE','PET','EPOXY','PP','PA66','PLA','FLAX_EPOXY','PEEK','PVC','NBR'} <= {m['id'] for m in items}
-    assert len(items) == 54
+    assert {'PE','LDPE','PET','EPOXY','PP','PA66','PLA','FLAX_EPOXY','PEEK','PVC','NBR',
+            'PPA','PEKK','PFA','FEP','ECTFE','PEBA','TPV','FKM','PBAT'} <= {m['id'] for m in items}
+    assert len(items) == 75
     assert all(m['category'] and m['subcategory'] for m in items)
     assert all(m['evidence_status'] in {'taxonomy_verified','experimental_pending','published_table_verified','datasheet_cross_checked'} for m in items)
     assert all(m['source_url'].startswith('https://') for m in items)
@@ -30,9 +31,9 @@ def test_seed_is_idempotent(tmp_path, monkeypatch):
     material_db.migrate()
     material_db.migrate()
     with store.connect() as conn:
-        assert conn.execute('SELECT COUNT(*) FROM materials').fetchone()[0] == 54
-        assert conn.execute('SELECT COUNT(*) FROM material_sources').fetchone()[0] == 35
-        assert conn.execute('SELECT COUNT(*) FROM material_reference_properties').fetchone()[0] == 12
+        assert conn.execute('SELECT COUNT(*) FROM materials').fetchone()[0] == 75
+        assert conn.execute('SELECT COUNT(*) FROM material_sources').fetchone()[0] == 53
+        assert conn.execute('SELECT COUNT(*) FROM material_reference_properties').fetchone()[0] == 21
         assert conn.execute("SELECT COUNT(*) FROM material_observations WHERE source_id='scida-2013-flax-epoxy'").fetchone()[0] == 10
         assert conn.execute("SELECT COUNT(*) FROM aging_evidence WHERE source_id='mdpi-pp-natural-aging-2024'").fetchone()[0] == 12
         assert conn.execute("SELECT COUNT(*) FROM aging_evidence WHERE source_id='mdpi-iir-mwf-2019'").fetchone()[0] == 24
@@ -52,7 +53,8 @@ def test_seed_is_idempotent(tmp_path, monkeypatch):
 
 def test_reference_properties_are_cross_checked_and_keep_conditions(tmp_path, monkeypatch):
     monkeypatch.setattr(store, 'DB', tmp_path / 'materials.sqlite3')
-    expected={'PP','PC','ABS','PBT','PA66','POM','COC','COP','PPSU','PA11'}
+    expected={'PP','PC','ABS','PBT','PA66','POM','COC','COP','PPSU','PA11',
+              'PEEK','PEI','PSU','PESU','PET','PVDF','PPA','PFA','FEP'}
     for material_id in expected:
         rows=material_db.reference_properties(material_id)
         assert rows
@@ -63,9 +65,18 @@ def test_reference_properties_are_cross_checked_and_keep_conditions(tmp_path, mo
         assert all(row['test_standard'] and row['conditioning'] and row['process'] for row in rows)
         profile=material_db.reference_property_profile(material_id)
         assert profile and profile['verification_status']=='cross_checked_official'
-    assert material_db.reference_property_profile('PET') is None
+    assert material_db.reference_property_profile('LDPE') is None
     assert material_db.reference_property_profile('PA66')['representative_mpa']==3050
     assert material_db.reference_property_profile('PA11')['representative_mpa']==1300
+    assert material_db.reference_property_profile('PET')['representative_mpa']==3100
+    assert material_db.reference_property_profile('PEEK')['representative_mpa']==4000
+    assert material_db.reference_property_profile('PEI')['representative_mpa']==3200
+    assert material_db.reference_property_profile('PSU')['representative_mpa']==2625
+    assert material_db.reference_property_profile('PESU')['representative_mpa']==2650
+    assert material_db.reference_property_profile('PVDF')['representative_mpa']==2250
+    assert material_db.reference_property_profile('PPA')['representative_mpa']==10500
+    assert material_db.reference_property_profile('PFA')['representative_mpa']==369
+    assert material_db.reference_property_profile('FEP')['representative_mpa']==480
     assert {row['representative_mpa'] for row in material_db.reference_properties('PA66')}=={1100,3050}
 
 

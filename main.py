@@ -195,10 +195,10 @@ def materials():
         with ui.element('div').classes('stat-grid w-full mt-5'):
             for label,value,detail in [
                 ('Référentiel',str(len(all_materials)),'matériaux classés et sourcés'),
-                ('Taxonomie vérifiée',str(sum(m['evidence_status']=='taxonomy_verified' for m in all_materials)),'fiches reliées au référentiel NIMS/IUPAC'),
+                ('Taxonomie vérifiée',str(sum(bool(m.get('taxonomy_source_id')) for m in all_materials)),'fiches reliées au référentiel NIMS/IUPAC'),
                 ('Observations acceptées',str(sum(m['accepted_observations'] for m in all_materials)),'seules données autorisées pour un entraînement réel'),
                 ('Preuves publiées',str(sum(m['verified_evidence_observations'] for m in all_materials)),'valeurs de tableaux relues et traçables'),
-                ('Modules recoupés',str(sum(m['verified_reference_properties'] for m in all_materials)),'fiches fabricant contrôlées par une seconde source officielle'),
+                ('Profils recoupés',str(sum(m['verified_reference_properties'] for m in all_materials)),'profils fabricant contrôlés par une seconde source officielle'),
             ]:
                 with ui.column().classes('panel gap-1'):
                     ui.label(label).classes('stat-label'); ui.label(value).classes('stat-value'); ui.label(detail).classes('small')
@@ -865,10 +865,10 @@ def legacy_simulator(material: str | None=None):
                 ui.label('Explorer un matériau de la base').classes('section-title')
                 pill('Données réelles uniquement','pill-teal')
             lin_epoxy=material_db.material('FLAX_EPOXY')
-            ui.label('La base contient 50 fiches. Le composite lin/époxy possède maintenant 10 points relus avec la publication primaire. Materia peut les interpoler jusqu’à 38 jours aux conditions exactes, sans extrapoler ni annoncer une durée de vie.').classes('body-copy')
+            ui.label('La base contient 75 fiches. Le composite lin/époxy possède 10 points relus avec la publication primaire. Materia peut les interpoler jusqu’à 38 jours aux conditions exactes, sans extrapoler ni annoncer une durée de vie.').classes('body-copy')
             with ui.row().classes('w-full gap-3 flex-wrap'):
                 with ui.column().classes('stat-card grow'):
-                    ui.label('50').classes('stat-value'); ui.label('fiches documentaires').classes('small')
+                    ui.label('75').classes('stat-value'); ui.label('fiches documentaires').classes('small')
                 with ui.column().classes('stat-card grow'):
                     ui.label('1').classes('stat-value'); ui.label('matériau avec mesures').classes('small')
                 with ui.column().classes('stat-card grow'):
@@ -1934,7 +1934,7 @@ def datasets():
                         dict(capacite='Recherche bibliographique',etat='Implémenté',preuve='Métadonnées Crossref uniquement'),
                         dict(capacite='Durée de vie réelle',etat='Non validé',preuve='Aucun corpus expérimental de référence'),
                         dict(capacite='PDF et recherche de passages',etat='Implémenté',preuve='Extraction texte par page ; contrôle humain nécessaire'),
-                        dict(capacite='Catalogue de matériaux réels',etat='Implémenté',preuve='50 fiches classées ; aperçu sur observations disponible'),
+                        dict(capacite='Catalogue de matériaux réels',etat='Implémenté',preuve='75 fiches classées ; 21 profils mécaniques recoupés'),
                         dict(capacite='Courbes issues des observations',etat='Exploratoire',preuve='Interpolation à conditions exactes ; aucune extrapolation'),
                         dict(capacite='Diagnostic de maturité',etat='Implémenté',preuve='Seuils, blocages, incertitude disponible et prochaine campagne explicités'),
                         dict(capacite='File de sources candidates',etat='Implémenté',preuve='Publications incompatibles ou à numériser isolées du corpus de calcul'),
@@ -1966,6 +1966,7 @@ def readiness():
         with store.connect() as conn: conn.execute('SELECT 1').fetchone()
         items=material_db.catalog()
         return {'status':'ready','database':True,'materials':len(items),
+                'verified_reference_profiles':sum(item['verified_reference_properties'] for item in items),
                 'accepted_observations':sum(item['accepted_observations'] for item in items),
                 'verified_published_evidence':sum(item['verified_evidence_observations'] for item in items),
                 'deployment':deployment.readiness_report()}
@@ -1983,6 +1984,7 @@ def material_api(material_id: str):
     item=material_db.material(material_id.upper())
     if not item: raise HTTPException(status_code=404,detail={'error':'Matériau inconnu','material_id':material_id})
     return {'material':item,'domain':material_db.domain_decision(item['id']),
+            'reference_properties':material_db.reference_properties(item['id']),
             'scientific_audit':material_db.corpus_audit(item['id']),
             'accepted_observations':material_db.accepted_rows(item['id'])}
 

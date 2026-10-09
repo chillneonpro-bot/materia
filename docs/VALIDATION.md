@@ -1,5 +1,9 @@
 # Rapport de validation du prototype — 30 septembre 2026
 
+## Extension v0.39 du référentiel
+
+Le catalogue contient désormais 75 matériaux. Vingt-et-un profils de module initial couvrent 19 matériaux et sont associés à deux supports fabricant officiels, avec le grade, la norme, le conditionnement, le procédé et la température d'essai. Cette validation documentaire concerne uniquement la propriété initiale. Elle ne transforme pas une fiche technique en série de vieillissement et ne relève pas le niveau de preuve de la cinétique.
+
 ## Situation actuelle - v0.20
 
 - 77 tests automatisés couvrent les calculs, ancres temporelles PP, imports CSV/XLSX, compatibilité des anciens jeux, exports XLSX/PDF, comptes, droits, classe, sauvegardes et diagnostics de validité.
