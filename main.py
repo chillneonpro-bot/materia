@@ -31,7 +31,9 @@ import plotly.graph_objects as go
 
 ROOT=Path(__file__).parent
 ui.add_css((ROOT/'materia/style.css').read_text(),shared=True)
-NAV=[('/', 'Accueil','space_dashboard'),('/materiaux','Matériaux','category'),('/simuler','Simuler','science'),('/comparer','Comparer','compare_arrows'),('/validite','Validité','verified'),('/projets','Mes projets','folder_open'),('/classe','Espace classe','groups'),('/connexion','Mon compte','account_circle'),('/comprendre','Comprendre','school'),('/documents','Mes documents','menu_book'),('/donnees','Données et modèles','database')]
+PRIMARY_NAV=[('/', 'Accueil','space_dashboard'),('/simuler','Simuler','science'),('/comparer','Comparer','compare_arrows'),('/projets','Mes projets','folder_open')]
+RESOURCE_NAV=[('/materiaux','Matériaux','category'),('/validite','Validité','verified'),('/comprendre','Comprendre','school'),('/documents','Mes documents','menu_book'),('/donnees','Données et modèles','database')]
+SPACE_NAV=[('/classe','Espace classe','groups'),('/connexion','Mon compte','account_circle')]
 
 ROLE_LABELS={'student':'Étudiant','teacher':'Enseignant','admin':'Administrateur'}
 
@@ -93,13 +95,14 @@ def warning():
         ui.icon('info_outline',size='18px'); ui.label('Démonstration pédagogique · Données synthétiques, aucune durée de vie validée.').classes('flex-1')
 def validity_panel(result: dict):
     diagnostic=validity_diagnostic(result)
-    with ui.expansion('Vérifier la validité de ce résultat',icon='verified_user').classes('w-full'):
+    with ui.expansion('Vérifier la validité de ce résultat',icon='verified_user').classes('w-full') as panel:
         with ui.column().classes('w-full gap-3 p-3'):
             pill(diagnostic['level'],'pill-teal' if all(c['status']=='bon' for c in diagnostic['checks']) else 'pill-amber')
             ui.label(diagnostic['conclusion']).classes('body-copy')
             table_rows(diagnostic['checks'],['criterion','status','finding'])
             ui.label('Expérience recommandée : '+diagnostic['recommended_experiment']).classes('note w-full')
             ui.link('Ouvrir le centre de validité →','/validite').classes('text-sm text-primary no-underline')
+    return panel
 
 def comparison_panel(report: dict):
     with ui.row().classes('w-full items-center justify-between gap-3'):
@@ -107,16 +110,23 @@ def comparison_panel(report: dict):
         pill(f"{report['score']}/100 · {report['label']}",'pill-teal' if report['tone']=='teal' else 'pill-amber')
     with ui.expansion('Voir les différences',icon='rule').classes('w-full'):
         table_rows(report['checks'],['criterion','status','finding'])
+def nav_link(href: str, label: str, icon: str, path: str):
+    with ui.link(target=href).classes('nav-link '+('active' if href==path else '')):
+        ui.icon(icon,size='21px'); ui.label(label)
 def shell(path,title):
     ui.colors(primary='#235abe',secondary='#13958b',accent='#235abe')
     with ui.left_drawer(value=False,top_corner=True,bottom_corner=True).props('show-if-above bordered width=236 breakpoint=1024').classes('sidebar') as drawer:
         with ui.row().classes('items-center gap-3'):
             ui.icon('blur_on',size='25px').classes('brand-symbol'); ui.label('materia').classes('brand')
         ui.label('Le temps, la matière.').classes('brand-sub')
-        for href,label,icon in NAV:
-            if href=='/projets': ui.label('Votre espace').classes('nav-section')
-            with ui.link(target=href).classes('nav-link '+('active' if href==path else '')):
-                ui.icon(icon,size='21px'); ui.label(label)
+        for href,label,icon in PRIMARY_NAV:
+            nav_link(href,label,icon,path)
+        with ui.expansion('Ressources',icon='apps',value=path in {item[0] for item in RESOURCE_NAV}).classes('nav-resources w-full'):
+            for href,label,icon in RESOURCE_NAV:
+                nav_link(href,label,icon,path)
+        ui.label('Votre espace').classes('nav-section')
+        for href,label,icon in SPACE_NAV:
+            nav_link(href,label,icon,path)
         ui.space()
         ui.label('Version bêta locale · v'+'.'.join(__version__.split('.')[:2])).classes('footer-note')
     with ui.row().classes('topbar'):
@@ -386,34 +396,34 @@ def datasheet_simulator(material: str | None=None):
     own=owner(); materials=available_materials()
     selected=material if material in materials else 'PP'; initial=standard_profile(materials[selected])
     with shell('/simuler','Fiche matériau'):
-        intro('Parcours 1 · exploration','Estimer depuis une fiche matériau',
-              'Renseignez l’état initial et l’environnement. Le résultat reste une projection de présélection, accompagnée de ses preuves et limites.')
+        intro('Simulation','Estimer le vieillissement d’un matériau',
+              'Choisissez le matériau, ses conditions d’utilisation et la durée à étudier.')
         simulation_switcher('/simuler/estimation')
         with ui.element('div').classes('work-grid simulation-work-grid w-full'):
             with ui.column().classes('panel gap-5 simulation-controls'):
-                ui.label('1. Matériau et état initial').classes('section-title')
+                ui.label('Paramètres de la simulation').classes('section-title')
                 options={m['id']:f"{m['name']} ({m['abbreviation']}) · {m['family']}"+(' · personnalisé' if m.get('custom') else '') for m in materials.values()}
                 material_select=ui.select(options,value=selected,label='Matériau').props('outlined use-input').classes('w-full')
-                e0=ui.number('Module de Young initial E₀ (MPa)',value=initial['suggested_modulus_mpa'],min=.01).props('outlined').classes('w-full')
-                basis=ui.label(initial['basis']).classes('field-help')
-                with ui.expansion('Préciser le grade et le procédé',icon='inventory_2').classes('w-full'):
-                    grade_reference=ui.input('Grade / référence commerciale',placeholder='Ex. PP H301').props('outlined').classes('w-full p-3')
-                    process_state=ui.input('Procédé / état de conditionnement',placeholder='Ex. injection, conditionné à 23 °C').props('outlined').classes('w-full px-3 pb-3')
-                ui.separator(); ui.label('2. Conditions de service').classes('section-title')
                 with ui.row().classes('w-full gap-3 flex-wrap'):
                     temperature=ui.number('Température (°C)',value=23,min=-40,max=160).props('outlined').classes('grow min-w-48')
-                    humidity=ui.number('Humidité relative (%)',value=50,min=0,max=100).props('outlined').classes('grow min-w-48')
-                    thickness=ui.number('Épaisseur (mm)',value=2,min=.01).props('outlined').classes('grow min-w-48')
-                exposure=ui.select({'indoor':'Intérieur / abrité','outdoor':'Extérieur / UV','immersion':'Immersion / contact permanent'},value='outdoor',label='Milieu').props('outlined').classes('w-full')
-                immersion_medium=ui.select({'unspecified':'Non précisé / autre liquide','water':'Eau','milform64':'Milform 64 SST'},
-                    value='unspecified',label='Liquide, si immersion').props('outlined').classes('w-full')
-                ui.label('En immersion, l’humidité relative de l’air est ignorée. Les données IIR publiées ne sont activées que pour Milform 64 SST entre 80 et 120 °C.').classes('field-help')
-                ui.separator(); ui.label('3. Objectif de lecture').classes('section-title')
+                    exposure=ui.select({'indoor':'Intérieur / abrité','outdoor':'Extérieur / UV','immersion':'Immersion / contact permanent'},value='outdoor',label='Milieu').props('outlined').classes('grow min-w-56')
                 with ui.row().classes('w-full gap-3 flex-wrap'):
-                    horizon=ui.number('Horizon affiché',value=120 if selected=='PP' else 2,min=.01).props('outlined').classes('grow min-w-48')
+                    horizon=ui.number('Durée à étudier',value=120 if selected=='PP' else 2,min=.01).props('outlined').classes('grow min-w-48')
                     horizon_unit=ui.select({'days':'Jours','months':'Mois','years':'Années'},value='days' if selected=='PP' else 'years',label='Unité').props('outlined').classes('min-w-48')
                     threshold=ui.number('Seuil conservé (%)',value=80,min=1,max=100).props('outlined').classes('grow min-w-48')
-                ui.label('Conversion utilisée : 1 année = 365,25 jours et 1 mois moyen = 30,4375 jours.').classes('field-help')
+                with ui.expansion('Paramètres avancés',icon='tune').classes('w-full'):
+                    with ui.column().classes('w-full gap-4 p-3'):
+                        e0=ui.number('Module de Young initial E₀ (MPa)',value=initial['suggested_modulus_mpa'],min=.01).props('outlined').classes('w-full')
+                        basis=ui.label(initial['basis']).classes('field-help')
+                        with ui.row().classes('w-full gap-3 flex-wrap'):
+                            humidity=ui.number('Humidité relative (%)',value=50,min=0,max=100).props('outlined').classes('grow min-w-48')
+                            thickness=ui.number('Épaisseur (mm)',value=2,min=.01).props('outlined').classes('grow min-w-48')
+                        immersion_medium=ui.select({'unspecified':'Non précisé / autre liquide','water':'Eau','milform64':'Milform 64 SST'},
+                            value='unspecified',label='Liquide, si immersion').props('outlined').classes('w-full')
+                        grade_reference=ui.input('Grade / référence commerciale',placeholder='Ex. PP H301').props('outlined').classes('w-full')
+                        process_state=ui.input('Procédé / état de conditionnement',placeholder='Ex. injection, conditionné à 23 °C').props('outlined').classes('w-full')
+                        ui.label('En immersion, l’humidité de l’air est ignorée. Les données IIR publiées exigent Milform 64 SST entre 80 et 120 °C.').classes('field-help mt-0')
+                        ui.label('Conversion : 1 année = 365,25 jours ; 1 mois moyen = 30,4375 jours.').classes('field-help mt-0')
                 def selected_evidence():
                     mat=materials[material_select.value]
                     if mat.get('custom'):
@@ -433,13 +443,16 @@ def datasheet_simulator(material: str | None=None):
                             duration_to_days(float(horizon.value),horizon_unit.value),exposure.value,
                             selected_evidence(),immersion_medium.value)
                         with ui.row().classes('w-full items-center justify-between gap-3'):
-                            ui.label('Préparation du calcul').classes('font-medium')
+                            ui.label('Contrôle des entrées').classes('font-medium')
                             pill(f"{report['score']}/100 · {report['label']}",'pill-teal' if report['tone']=='teal' else 'pill-amber')
-                        with ui.expansion('Vérifier les entrées',icon='checklist').classes('w-full'):
+                        with ui.expansion('Voir le détail',icon='checklist').classes('w-full'):
                             table_rows(report['checks'],['criterion','status','finding'])
                     except (ValueError,TypeError):
                         ui.label('Complétez les valeurs numériques pour évaluer la préparation.').classes('note w-full')
-                preparation_panel()
+                with ui.expansion('Contrôle des entrées',icon='check_circle_outline').classes('w-full'):
+                    with ui.row().classes('w-full gap-3 flex-wrap'):
+                        with ui.column().classes('w-full gap-3 p-3'):
+                            preparation_panel()
                 calculate_slot=ui.row().classes('w-full')
                 output=ui.column().classes('w-full')
                 def change_material():
@@ -471,52 +484,23 @@ def datasheet_simulator(material: str | None=None):
                             standard_profile(mat)['suggested_modulus_mpa'],grade_reference.value or '',process_state.value or '',
                             horizon_days,exposure.value,evidence,immersion_medium.value)
                         refresh_result_fingerprint(result)
-                        assessment=evidence_assessment(result); crossing=result['crossing_estimate_years']; lo,hi=result['crossing_interval']
-                        assumptions=result['manifest']['assumptions']; informed=bool(assumptions['evidence_calibrated'])
+                        crossing=result['crossing_estimate_years']; lo,hi=result['crossing_interval']
+                        assumptions=result['manifest']['assumptions']
                         with output:
                             ui.separator()
-                            with ui.row().classes('w-full items-center justify-between gap-3'):
-                                ui.label('Résultat de la projection').classes('section-title')
-                                with ui.row().classes('gap-2 flex-wrap'):
-                                    origin=curve_value_origin(result)
-                                    pill('À l’horizon : '+origin,'pill-teal' if origin in {'Observé','Interpolé'} else 'pill-amber')
-                                    pill(assessment['level']+' · '+assessment['label'],'pill-teal' if assessment['tone']=='teal' else 'pill-amber')
+                            ui.label('Votre estimation').classes('section-title')
                             source_uncertainty=result['manifest']['uncertainty'].get('source_specific') or {}
-                            interval_validated=bool(source_uncertainty.get('predictive_interval_validated'))
                             match=assumptions.get('documentary_match') or {'score':0,'label':'Non renseigné'}
-                            uncertainty_kind=result['manifest']['uncertainty']['kind']
                             scientific_uncertainty_kind=source_uncertainty.get('kind')
-                            threshold_extrapolated=bool(informed and crossing is not None and assumptions['evidence_window_days'] and crossing*365.25>assumptions['evidence_window_days'])
-                            dispersion_detail=('Calibrage hors publication · couverture pilote'
-                                if scientific_uncertainty_kind=='source_level_predictive_interval' else
-                                'Écart-type publié ; pas encore un intervalle prédictif'
-                                if scientific_uncertainty_kind=='reported_standard_deviation' else
-                                'Plage standardisée identique pour tous les matériaux')
                             horizon_text=result['manifest']['inputs']['horizon_display']['label']
-                            if informed:
-                                threshold_inside=bool(crossing is not None and crossing*365.25<=assumptions['evidence_window_days'])
-                                if threshold_inside:
-                                    threshold_card=('Temps au seuil dans la fenêtre publiée',format_years_months(crossing),
-                                                    f"Fenêtre observée : 0–{assumptions['evidence_window_days']:.0f} jours")
-                                elif crossing is not None:
-                                    threshold_card=('Estimation centrale du temps au seuil',format_years_months(crossing),
-                                                    f"Après {assumptions['evidence_window_days']:.0f} jours · sensibilité {format_years_months(lo)}–{format_years_months(hi)}")
-                                else:
-                                    threshold_card=('Estimation du temps au seuil','Non calculable',
-                                                    f"Fenêtre observée : 0–{assumptions['evidence_window_days']:.0f} jours")
-                                band_detail=result['manifest']['uncertainty']['label']
-                                result_cards=[
-                                    (f'Prévision P50 à {horizon_text}',f"{number_fr(result['modulus'][-1])} MPa",f"{number_fr(result['retention'][-1],1)} % du module initial"),
-                                    ('Bornes à ce même horizon',f"{number_fr(result['lower'][-1])} – {number_fr(result['upper'][-1])} MPa",
-                                     band_detail),
-                                    threshold_card,
-                                ]
-                            else:
-                                result_cards=[
-                                    ('Estimation centrale du temps au seuil',format_years_months(crossing),'Valeur de travail recommandée'),
-                                    ('Plage standardisée',f"{format_years_months(lo)} – {format_years_months(hi)}",'10 % au total · vitesse ×0,95 à ×1,05'),
-                                    (f'Module estimé à {horizon_text}',f"{number_fr(result['modulus'][-1])} MPa",f"{number_fr(result['retention'][-1],1)} % du module initial"),
-                                ]
+                            central_text=format_years_months(crossing) if crossing is not None else 'Non atteint'
+                            interval_text=(f"{format_years_months(lo)} – {format_years_months(hi)}"
+                                           if crossing is not None else 'Non calculable')
+                            result_cards=[
+                                ('Temps estimé pour atteindre le seuil',central_text,f"Seuil choisi : {threshold.value:g} %"),
+                                ('Plage estimée',interval_text,'10 % au total'),
+                                (f'Module à {horizon_text}',f"{number_fr(result['modulus'][-1])} MPa",f"{number_fr(result['retention'][-1],1)} % conservés"),
+                            ]
                             with ui.element('div').classes('result-grid w-full'):
                                 for label,value,detail in result_cards:
                                     with ui.column().classes('result-stat gap-1'):
@@ -536,23 +520,27 @@ def datasheet_simulator(material: str | None=None):
                             if band_mode:
                                 band_mode.on_value_change(lambda:result_chart.refresh())
                             result_chart()
-                            if informed:
-                                ui.label(f"Valeur à retenir : utilisez la courbe centrale. La plage principale fait 10 % au total et applique la même vitesse ×0,95–×1,05 à tous les matériaux. Les détails scientifiques restent disponibles plus bas. Sources compatibles : {match['score']}/100.").classes('note w-full')
-                            else:
-                                ui.label(f"Valeur à retenir : {format_years_months(crossing)} pour atteindre {threshold.value:g} %. La plage {format_years_months(lo)}–{format_years_months(hi)} reste indicative.").classes('note w-full')
-                            with ui.expansion('Afficher les valeurs de la courbe',icon='table_chart').classes('w-full'):
+                            ui.label(
+                                f"Estimation à retenir : {central_text} pour atteindre {threshold.value:g} %. "
+                                f"La plage raisonnable est {interval_text}."
+                            ).classes('result-summary w-full')
+                            with ui.expansion('Détails et méthode',icon='info_outline').classes('w-full'):
+                                details_mount=ui.column().classes('w-full gap-3 p-3')
+                            with ui.expansion('Afficher les valeurs de la courbe',icon='table_chart').classes('w-full') as curve_values_panel:
                                 table_rows(sampled_curve_rows(result),['temps','unite','module_mpa','module_min_mpa','module_max_mpa','retention_pct','origine'])
+                            curve_values_panel.move(details_mount)
                             if assumptions['evidence_calibrated'] and assumptions['extrapolation_multiple']>1:
                                 ui.label(f"Après {assumptions['evidence_window_days']:.0f} jours, la zone orangée signale une extrapolation.").classes('note w-full')
                             elif not assumptions['evidence_calibrated']:
-                                with ui.expansion('Comprendre la plage de sensibilité',icon='tune').classes('w-full'):
+                                with ui.expansion('Comprendre la plage de sensibilité',icon='tune').classes('w-full') as sensitivity_panel:
                                     ui.label('La ligne centrale reste le résultat recommandé. Les deux bornes forment une plage totale de 10 %, soit ±5 % sur la vitesse. Elles ne sont pas des probabilités.').classes('field-help')
                                     table_rows([
                                         {'scenario':'Vieillissement plus rapide · vitesse ×1,05','franchissement':format_years_months(lo),'usage':'Borne standard basse'},
                                         {'scenario':'Estimation centrale · vitesse ×1','franchissement':format_years_months(crossing),'usage':'Valeur à utiliser'},
                                         {'scenario':'Vieillissement plus lent · vitesse ×0,95','franchissement':format_years_months(hi),'usage':'Borne standard haute'},
                                     ],['scenario','franchissement','usage'])
-                            with ui.expansion('Planifier une campagne de validation',icon='event_note').classes('w-full'):
+                                sensitivity_panel.move(details_mount)
+                            with ui.expansion('Planifier une campagne de validation',icon='event_note').classes('w-full') as planning_panel:
                                 ui.label('Materia propose les temps qui couvrent le départ, la fenêtre documentaire, le seuil central et l’horizon final.').classes('body-copy p-3 pb-0')
                                 with ui.row().classes('w-full gap-3 flex-wrap px-3'):
                                     planned_times=ui.number('Temps distincts',value=5,min=5,max=10,step=1).props('outlined').classes('grow min-w-40')
@@ -588,8 +576,10 @@ def datasheet_simulator(material: str | None=None):
                                         with plan_output: ui.label(str(exc)).classes('note w-full')
                                 ui.button('Mettre à jour le plan',icon='refresh',on_click=update_experiment_plan).props('unelevated').classes('mx-3 mb-3')
                                 update_experiment_plan()
-                            validity_panel(result)
-                            with ui.expansion('Méthode, facteurs et traçabilité',icon='fact_check').classes('w-full'):
+                            planning_panel.move(details_mount)
+                            result_validity_panel=validity_panel(result)
+                            result_validity_panel.move(details_mount)
+                            with ui.expansion('Méthode, facteurs et traçabilité',icon='fact_check').classes('w-full') as method_panel:
                                 if assumptions['evidence_calibrated']:
                                     if scientific_uncertainty_kind in {'source_level_predictive_interval','extrapolation_sensitivity'}:
                                         calibration=source_uncertainty['calibration']
@@ -653,26 +643,33 @@ def datasheet_simulator(material: str | None=None):
                                         ui.label('Extraction : '+', '.join(source_item['extraction_methods'])).classes('field-help')
                                 elif source.get('url'):
                                     ui.link(source.get('title') or 'Source de la fiche',source['url'],new_tab=True).classes('text-sm')
+                            method_panel.move(details_mount)
                             def save_projection():
                                 store.save(own,'simulation',f"{mat['name']} · {temperature.value:g} °C",result)
                                 ui.notify('Projection enregistrée dans Mes projets.',type='positive')
-                            with ui.row().classes('gap-3 flex-wrap'):
+                            with ui.row().classes('gap-3 flex-wrap items-center'):
                                 ui.button('Enregistrer',icon='bookmark_border',on_click=save_projection).props('unelevated')
-                                ui.button('Figer avant essais',icon='lock_clock',on_click=lambda:download_json(
-                                    freeze_prediction(result,f"{mat['name']} · prédiction avant essais"),
-                                    'prediction-aveugle-materia.json')).props('outline')
-                                ui.button('Exporter le classeur Excel',icon='table_view',on_click=lambda:ui.download(
-                                    result_workbook(result,'Projection · '+mat['name']),
-                                    'projection-materia.xlsx',MIME_XLSX)).props('outline')
-                                ui.button('Plan d’expérience',icon='event_note',on_click=lambda:ui.download(
-                                    experiment_plan_workbook(experiment_plan(result),result,'Plan d’expérience · '+mat['name']),
-                                    'plan-experience-materia.xlsx',MIME_XLSX)).props('outline')
-                                ui.button('Rapport PDF',icon='picture_as_pdf',on_click=lambda:ui.download(
-                                    result_pdf(result,'Projection · '+mat['name']),'rapport-materia.pdf','application/pdf')).props('outline')
-                                ui.button('Carte de preuve',icon='fact_check',on_click=lambda:ui.download(
-                                    evidence_card_pdf(result,'Projection · '+mat['name']),'carte-preuve-materia.pdf','application/pdf')).props('outline')
-                                ui.button('Rapport étudiant',icon='article',on_click=lambda:ui.download(markdown_report(result,'Projection · '+mat['name']),'rapport-materia.md','text/markdown')).props('outline')
-                                ui.button('Exporter le rapport JSON',icon='download',on_click=lambda:download_json(result,'rapport-projection-materia.json')).props('outline')
+                                with ui.button('Exporter',icon='download').props('outline'):
+                                    with ui.menu():
+                                        ui.menu_item('Classeur Excel',lambda:ui.download(
+                                            result_workbook(result,'Projection · '+mat['name']),
+                                            'projection-materia.xlsx',MIME_XLSX))
+                                        ui.menu_item('Rapport PDF',lambda:ui.download(
+                                            result_pdf(result,'Projection · '+mat['name']),'rapport-materia.pdf','application/pdf'))
+                                        ui.menu_item('Rapport étudiant',lambda:ui.download(
+                                            markdown_report(result,'Projection · '+mat['name']),'rapport-materia.md','text/markdown'))
+                                        ui.separator()
+                                        ui.menu_item('Carte de preuve',lambda:ui.download(
+                                            evidence_card_pdf(result,'Projection · '+mat['name']),'carte-preuve-materia.pdf','application/pdf'))
+                                        ui.menu_item('Données JSON',lambda:download_json(result,'rapport-projection-materia.json'))
+                            with ui.expansion('Outils de recherche',icon='science').classes('w-full'):
+                                with ui.row().classes('gap-3 flex-wrap p-3'):
+                                    ui.button('Figer avant essais',icon='lock_clock',on_click=lambda:download_json(
+                                        freeze_prediction(result,f"{mat['name']} · prédiction avant essais"),
+                                        'prediction-aveugle-materia.json')).props('outline')
+                                    ui.button('Plan d’expérience',icon='event_note',on_click=lambda:ui.download(
+                                        experiment_plan_workbook(experiment_plan(result),result,'Plan d’expérience · '+mat['name']),
+                                        'plan-experience-materia.xlsx',MIME_XLSX)).props('outline')
                     except (ValueError,TypeError) as exc:
                         with output: ui.label(str(exc)).classes('note w-full')
                 with calculate_slot:
@@ -1042,13 +1039,16 @@ def compare():
                         value=default_ids,multiple=True,label='Matériaux à comparer (1 à 4)').props('outlined use-chips use-input').classes('w-full')
                     with ui.row().classes('w-full gap-3 flex-wrap'):
                         compare_temp=ui.number('Température (°C)',value=23,min=-40,max=160).props('outlined').classes('grow min-w-40')
-                        compare_rh=ui.number('Humidité relative (%)',value=50,min=0,max=100).props('outlined').classes('grow min-w-40')
-                        compare_thickness=ui.number('Épaisseur (mm)',value=2,min=.01).props('outlined').classes('grow min-w-40')
                         compare_exposure=ui.select({'indoor':'Intérieur','outdoor':'Extérieur / UV','immersion':'Immersion'},value='outdoor',label='Milieu').props('outlined').classes('grow min-w-48')
                     with ui.row().classes('w-full gap-3 flex-wrap'):
                         compare_horizon=ui.number('Horizon',value=2,min=.01).props('outlined').classes('grow min-w-40')
                         compare_unit=ui.select({'days':'Jours','months':'Mois','years':'Années'},value='years',label='Unité').props('outlined').classes('min-w-40')
                         compare_threshold=ui.number('Seuil conservé (%)',value=80,min=1,max=100).props('outlined').classes('grow min-w-48')
+                    with ui.expansion('Paramètres avancés',icon='tune').classes('w-full'):
+                        with ui.row().classes('w-full gap-3 flex-wrap p-3'):
+                            compare_rh=ui.number('Humidité relative (%)',value=50,min=0,max=100).props('outlined').classes('grow min-w-40')
+                            compare_thickness=ui.number('Épaisseur (mm)',value=2,min=.01).props('outlined').classes('grow min-w-40')
+                    compare_button_slot=ui.row().classes('w-full')
                     material_area=ui.column().classes('w-full')
                     def compare_materials():
                         material_area.clear(); selected_ids=list(material_select.value or [])
@@ -1079,12 +1079,20 @@ def compare():
                                 if not compatibility['can_compare']:
                                     ui.label('Les courbes ne sont pas tracées tant que la propriété comparée diffère.').classes('note w-full'); return
                                 ui.plotly(comparison(values,compare_unit.value,float(compare_threshold.value))).classes('w-full')
-                                table_rows(summary,['materiau','module_initial_mpa','module_final_mpa','retention_finale_pct','seuil','origine','niveau'])
-                                ui.label('Comparaison exploratoire à conditions communes. Chaque matériau conserve son module initial et ses hypothèses de famille ; aucune courbe ne constitue une qualification.').classes('note w-full')
+                                with ui.element('div').classes('result-grid w-full'):
+                                    for row in summary:
+                                        with ui.column().classes('result-stat gap-1'):
+                                            ui.label(row['materiau']).classes('stat-label')
+                                            ui.label(f"{number_fr(row['retention_finale_pct'],1)} % conservés").classes('result-value')
+                                            ui.label('Seuil : '+row['seuil']).classes('small')
+                                with ui.expansion('Voir les résultats détaillés',icon='table_view').classes('w-full'):
+                                    table_rows(summary,['materiau','module_initial_mpa','module_final_mpa','retention_finale_pct','seuil','origine','niveau'])
+                                    ui.label('Comparaison exploratoire à conditions communes. Chaque matériau conserve son module initial et ses hypothèses de famille.').classes('small')
                                 ui.button('Exporter la comparaison Excel',icon='table_view',on_click=lambda values=values:ui.download(
                                     comparison_workbook(values,'Comparaison de matériaux'),'comparaison-materiaux.xlsx',MIME_XLSX)).props('outline')
                             except (ValueError,TypeError) as exc: ui.label(str(exc)).classes('note w-full')
-                    ui.button('Comparer les matériaux',icon='compare_arrows',on_click=compare_materials).props('unelevated')
+                    with compare_button_slot:
+                        ui.button('Comparer les matériaux',icon='compare_arrows',on_click=compare_materials).props('unelevated').classes('w-full')
                     compare_materials()
             else:
                 saved=store.records(owner(),'simulation')
