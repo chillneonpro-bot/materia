@@ -13,7 +13,7 @@ Les résultats sont internes aux publications citées. Ils ne prouvent pas encor
 
 ## Correction du corpus IIR
 
-Le corpus antérieur provenait d’une lecture OCR erronée. Il a été remplacé par la transcription directe des 21 valeurs `E_exp` du tableau 1 de l’article primaire. Les temps exacts sont 0, 1, 2, 4, 6, 14 et 24 h. Le faux temps 3 h a été supprimé.
+Le corpus antérieur provenait d’une lecture OCR erronée. Il a été remplacé par la transcription directe des 21 valeurs `E_exp` du tableau 2 de l’article primaire, mesurées en présence du fluide Milform 64 SST. Les temps exacts sont 0, 1, 2, 4, 6, 14 et 24 h. Le faux temps 3 h a été supprimé.
 
 Source : Nguyen-Tri, Triki et Nguyen, *Butyl Rubber-Based Composite: Thermal Degradation and Prediction of Service Lifetime*, Journal of Composites Science 3(2), 48 (2019), DOI [10.3390/jcs3020048](https://doi.org/10.3390/jcs3020048).
 
@@ -24,15 +24,15 @@ Chaque point intérieur est retiré à tour de rôle. Materia le reconstruit par
 | Indicateur | Résultat |
 |---|---:|
 | Prédictions masquées | 15 |
-| MAE | 0,311 MPa |
-| RMSE | 0,505 MPa |
-| MAPE | 6,40 % |
-| R² | 0,869 |
-| Bande conformale interne cible 80 % | ±10,90 % |
+| MAE | 0,321 MPa |
+| RMSE | 0,588 MPa |
+| MAPE | 8,35 % |
+| R² | 0,810 |
+| Bande conformale interne cible 80 % | ±14,65 % |
 | Couverture empirique | 86,67 % |
-| Pire erreur relative | 20,82 % |
+| Pire erreur relative | 51,38 % |
 
-La bande ±10,9 % convient comme bande pilote d’interpolation entre temps connus dans la fenêtre 0–24 h. Le pire point apparaît sur la courbe non monotone à 120 °C. Les écarts-types publiés restent affichés quand Materia restitue directement une courbe exacte.
+La bande interne ±14,65 % couvre 13 des 15 points masqués. Elle ne couvre pas le transitoire brutal de la courbe à 120 °C entre 2 h et 4 h, où l’interpolation atteint 51,38 % d’erreur. Materia doit donc restituer les points publiés exacts à cette température et signaler qu’une interpolation traversant ce transitoire est peu fiable.
 
 ## IIR : transfert en température
 
@@ -41,12 +41,12 @@ La courbe complète à 100 °C est ensuite masquée. La prédiction utilise seul
 | Indicateur | Résultat |
 |---|---:|
 | Prédictions masquées | 6 |
-| MAE | 0,332 MPa |
-| MAPE | 10,60 % |
-| R² | -7,283 |
-| Pire erreur relative | 26,24 % |
+| MAE | 0,278 MPa |
+| MAPE | 11,31 % |
+| R² | -2,154 |
+| Pire erreur relative | 28,76 % |
 
-Le transfert linéaire en température est rejeté. Le R² négatif signifie que cette reconstruction est moins pertinente qu’une moyenne constante des valeurs à 100 °C. Materia privilégie donc les courbes publiées exactes à 80, 100 ou 120 °C. Une température intermédiaire ne doit pas hériter de la bande temporelle ±10,9 %.
+Le transfert linéaire en température est rejeté. Le R² négatif signifie que cette reconstruction est moins pertinente qu’une moyenne constante des valeurs à 100 °C. Materia privilégie donc les courbes publiées exactes à 80, 100 ou 120 °C. Une température intermédiaire reçoit une alerte et une borne scientifique de ±28,76 % issue de ce test masqué.
 
 ## Lin/époxy : transfert entre deux campagnes
 
@@ -72,8 +72,8 @@ Source : Scida et al., *Influence of hygrothermal ageing on the damage mechanism
 | Cas | Courbe recommandée | Bande | Limite |
 |---|---|---:|---|
 | IIR à 80, 100 ou 120 °C | Courbe publiée exacte | Écart-type publié | 0–24 h, Milform 64 SST, formulation BRC de l’article |
-| IIR entre deux temps mesurés | Interpolation temporelle | ±10,9 % pilote | Pire erreur observée 20,8 % |
-| IIR à une température non publiée | Ne pas annoncer la même précision | au moins ±26,2 % dans ce test | Loi thermique non validée |
+| IIR entre deux temps mesurés | Interpolation temporelle hors transitoire brutal | ±14,7 % pilote | Pire erreur observée 51,4 % à 120 °C / 4 h |
+| IIR à une température non publiée | Ne pas annoncer la même précision | au moins ±28,8 % dans ce test | Loi thermique non validée |
 | Lin/époxy 20–40 °C | Rétention transférée | ±11,4 % pilote | 0–38 jours, 90 % HR, formulation exacte |
 
 Les calculs reproductibles sont disponibles sur la page **Validité**, ainsi que par les routes `/api/validation/iir` et `/api/validation/flax-epoxy`.

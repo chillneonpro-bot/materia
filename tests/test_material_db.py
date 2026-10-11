@@ -112,11 +112,11 @@ def test_unverified_evidence_never_reaches_model_rows(tmp_path, monkeypatch):
     iir_rows=material_db.evidence_rows('IIR','immersion')
     assert len(iir_rows)==21
     assert {r['ageing_temperature_c'] for r in iir_rows}=={80.,100.,120.}
-    assert all(r['source_location'].startswith('Tableau 1') for r in iir_rows)
+    assert all(r['source_location'].startswith('Tableau 2') for r in iir_rows)
     assert not any(abs(r['time_days']-3/24)<1e-12 for r in iir_rows)
     value_120c_2h=next(r for r in iir_rows
                        if r['ageing_temperature_c']==120 and abs(r['time_days']-2/24)<1e-12)
-    assert value_120c_2h['modulus_mpa']==pytest.approx(7.43)
+    assert value_120c_2h['modulus_mpa']==pytest.approx(6.46)
 
 
 def test_corpus_audit_explains_scientific_gates(tmp_path, monkeypatch):

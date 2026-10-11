@@ -121,9 +121,14 @@ def shell(path,title):
         ui.label('Le temps, la matière.').classes('brand-sub')
         for href,label,icon in PRIMARY_NAV:
             nav_link(href,label,icon,path)
-        with ui.expansion('Ressources',icon='apps',value=path in {item[0] for item in RESOURCE_NAV}).classes('nav-resources w-full'):
-            for href,label,icon in RESOURCE_NAV:
-                nav_link(href,label,icon,path)
+        resource_active=path in {item[0] for item in RESOURCE_NAV}
+        with ui.button('Ressources',icon='apps').props('flat no-caps align=left').classes(
+            'nav-menu-button w-full '+('active' if resource_active else '')):
+            with ui.menu().classes('resource-menu'):
+                for href,label,icon in RESOURCE_NAV:
+                    with ui.menu_item(on_click=lambda href=href:ui.navigate.to(href)):
+                        with ui.row().classes('items-center gap-3 no-wrap'):
+                            ui.icon(icon,size='19px'); ui.label(label)
         ui.label('Votre espace').classes('nav-section')
         for href,label,icon in SPACE_NAV:
             nav_link(href,label,icon,path)
@@ -1179,7 +1184,7 @@ def validity_page():
             ui.label(iir_temporal['protocol']).classes('body-copy')
             with ui.element('div').classes('result-grid w-full'):
                 for label,value,detail in [
-                    ('Valeurs publiées','21','Tableau 1 vérifié · 80, 100 et 120 °C'),
+                    ('Valeurs publiées','21','Tableau 2 vérifié · 80, 100 et 120 °C'),
                     ('Erreur moyenne',f"{number_fr(iir_temporal['mape_pct'],2)} %",f"MAE {number_fr(iir_temporal['mae_mpa'],2)} MPa"),
                     ('Bande interne 80 %',f"± {number_fr(iir_temporal['empirical_half_width_pct'],1)} %",f"Pire écart {number_fr(iir_temporal['max_relative_error_pct'],1)} %"),
                 ]:
@@ -1198,7 +1203,7 @@ def validity_page():
                 ui.label('Contrôle plus difficile : masquer toute la courbe à 100 °C').classes('font-medium')
                 pill(iir_temperature['status'],'pill-amber')
             ui.label(f"L’interpolation depuis 80 et 120 °C donne {number_fr(iir_temperature['mape_pct'],2)} % d’erreur moyenne, jusqu’à {number_fr(iir_temperature['max_relative_error_pct'],2)} %. Le R² est {number_fr(iir_temperature['r2'],2)} : cette loi en température est donc rejetée.").classes('body-copy')
-            ui.label('Décision logicielle : utiliser les courbes publiées exactes à 80, 100 ou 120 °C. Pour une température intermédiaire, afficher une alerte et ne pas promettre la bande ±10,9 %.').classes('pill pill-amber')
+            ui.label(f"Décision logicielle : utiliser les courbes publiées exactes à 80, 100 ou 120 °C. Pour une température intermédiaire, afficher une alerte et appliquer la borne observée du test masqué (±{number_fr(iir_temperature['empirical_half_width_pct'],1)} %), distincte de la plage visuelle commune.").classes('pill pill-amber')
             ui.link('Source primaire IIR · DOI 10.3390/jcs3020048','https://www.mdpi.com/2504-477X/3/2/48',new_tab=True).classes('text-sm')
         with ui.column().classes('panel w-full mt-5 gap-4'):
             with ui.row().classes('w-full justify-between items-center gap-3'):

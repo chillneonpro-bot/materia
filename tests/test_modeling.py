@@ -130,9 +130,9 @@ def test_iir_uses_published_surface_only_inside_temperature_domain():
     assert inside['manifest']['assumptions']['evidence_window_days']==pytest.approx(1)
     assert inside['manifest']['uncertainty']['kind']=='standardized_rate_sensitivity'
     assert inside['manifest']['uncertainty']['source_specific']['kind']=='reported_standard_deviation'
-    # Official Table 1 reports 3.00 MPa initially and 3.30 MPa at 24 h at
-    # 100 °C: the non-monotone response is preserved rather than forced down.
-    assert inside['retention'][-1]==pytest.approx(110.,abs=.1)
+    # Official Table 2 (with Milform 64 SST) reports 2.70 MPa initially and
+    # 1.92 MPa at 24 h at 100 °C.
+    assert inside['retention'][-1]==pytest.approx(71.11,abs=.1)
     assert outside['manifest']['assumptions']['evidence_calibrated'] is False
     wrong_liquid=estimate_from_datasheet(material,10,100,50,2,1/365.25,70,'immersion',rows,'water')
     assert wrong_liquid['manifest']['assumptions']['evidence_calibrated'] is False
@@ -144,9 +144,9 @@ def test_iir_unmeasured_temperature_uses_masked_transfer_error_not_published_sd(
     uncertainty=interpolated['manifest']['uncertainty']
     assert uncertainty['kind']=='standardized_rate_sensitivity'
     assert uncertainty['source_specific']['kind']=='temperature_transfer_holdout'
-    assert uncertainty['source_specific']['calibration']['empirical_half_width_pct']==pytest.approx(26.2381252684)
+    assert uncertainty['source_specific']['calibration']['empirical_half_width_pct']==pytest.approx(28.7630553980)
     assert uncertainty['rate_multipliers']==[.95,1.05]
-    assert any('±26,24 %' in warning for warning in interpolated['manifest']['warnings'])
+    assert any('±28,76 %' in warning for warning in interpolated['manifest']['warnings'])
 
 
 def test_published_curve_interpolates_sd_and_refuses_extrapolation():

@@ -207,7 +207,7 @@ def _temperature_surface_profile(rows: list[dict], temperature_c: float) -> dict
                            if transfer_calibration else None),
             'source':{'id':first.get('source_id'),'title':first.get('source_title'),
                       'url':first.get('source_url'),'doi':first.get('source_doi'),
-                      'location':f'Tableau 1, {"courbe exacte" if exact_temperature else "interpolation"} à {temperature_c:g} °C'}}
+                      'location':f'Tableau 2, {"courbe exacte" if exact_temperature else "interpolation"} à {temperature_c:g} °C'}}
 
 
 def _literature_ensemble_profile(rows: list[dict]) -> dict | None:
@@ -539,8 +539,10 @@ def estimate_from_datasheet(material: dict, modulus_mpa: float, temperature_c: f
         profile_warning=('Les facteurs température, humidité et épaisseur sont des hypothèses exploratoires ; '
                          'la plage principale applique la convention commune ×0,95–×1,05 sur la vitesse.')
     elif observed_profile.get('profile_kind')=='temperature_surface':
-        profile_warning=('La température saisie n’a pas de courbe exacte : la bande est élargie à la pire erreur '
-                         'du test masqué 100 °C (±26,24 %).') if temperature_transfer else (
+        transfer_half_width=float(((observed_profile.get('calibration') or {}).get('empirical_half_width_pct') or 0))
+        transfer_half_width_label=f'{transfer_half_width:.2f}'.replace('.',',')
+        profile_warning=('La température saisie n’a pas de courbe exacte : la bande scientifique est élargie à la pire erreur '
+                         f'du test masqué 100 °C (±{transfer_half_width_label} %).') if temperature_transfer else (
                          'La courbe correspond à une température publiée exacte ; aucun transfert sous 80 °C '
                          'ou au-dessus de 120 °C.')
     elif observed_profile.get('profile_kind')=='source_ensemble':

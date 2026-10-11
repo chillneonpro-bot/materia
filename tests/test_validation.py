@@ -54,12 +54,12 @@ def test_iir_masked_interpolation_and_temperature_transfer_are_separated():
     temporal=iir_temporal_holdout(rows)
     temperature=iir_temperature_holdout(rows)
     assert temporal['test_count']==15
-    assert temporal['mape_pct']==pytest.approx(6.4004515278)
-    assert temporal['empirical_half_width_pct']==pytest.approx(10.8996539792)
-    assert temporal['max_relative_error_pct']==pytest.approx(20.8165096456)
+    assert temporal['mape_pct']==pytest.approx(8.3512505078)
+    assert temporal['empirical_half_width_pct']==pytest.approx(14.6496815287)
+    assert temporal['max_relative_error_pct']==pytest.approx(51.3803680982)
     assert temperature['test_count']==6
-    assert temperature['mape_pct']==pytest.approx(10.6011432284)
-    assert temperature['max_relative_error_pct']==pytest.approx(26.2381252684)
+    assert temperature['mape_pct']==pytest.approx(11.3127887737)
+    assert temperature['max_relative_error_pct']==pytest.approx(28.7630553980)
     assert temperature['r2']<0
     assert 'NON VALIDÉ' in temperature['status']
 
